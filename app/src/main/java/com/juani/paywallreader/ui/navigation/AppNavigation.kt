@@ -54,6 +54,8 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
 import com.juani.paywallreader.ui.home.HomeRoute
 import com.juani.paywallreader.ui.reader.ReaderRoute
@@ -88,12 +90,35 @@ fun AppNavigation() {
             WindowCompat.getInsetsController(
                 (view.context as android.app.Activity).window,
                 view,
-            ).isAppearanceLightStatusBars = openReaderUrl != null || !darkTheme
+            ).apply {
+                isAppearanceLightStatusBars = openReaderUrl != null || !darkTheme
+                systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (openReaderUrl != null) {
+                    hide(WindowInsetsCompat.Type.statusBars())
+                } else {
+                    show(WindowInsetsCompat.Type.statusBars())
+                }
+            }
         }
     }
     val closeReader = {
         backStack.removeLastOrNull()
         openReaderUrl = backStack.filterIsInstance<AppRoute.Reader>().lastOrNull()?.url
+        if (!view.isInEditMode) {
+            WindowCompat.getInsetsController(
+                (view.context as android.app.Activity).window,
+                view,
+            ).apply {
+                if (openReaderUrl == null) {
+                    show(WindowInsetsCompat.Type.statusBars())
+                    isAppearanceLightStatusBars = !darkTheme
+                } else {
+                    hide(WindowInsetsCompat.Type.statusBars())
+                    isAppearanceLightStatusBars = true
+                }
+            }
+        }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
