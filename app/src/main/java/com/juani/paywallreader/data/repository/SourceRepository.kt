@@ -79,6 +79,10 @@ class SourceRepository(
         )
         sourceDao.trimHistory()
     }
+
+    suspend fun clearHistory() {
+        sourceDao.clearHistory()
+    }
 }
 
 private const val DEFAULT_FOLDER_NAME = "News"

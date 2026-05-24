@@ -42,6 +42,9 @@ interface SourceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistoryItem(item: HistoryEntity): Long
 
+    @Query("DELETE FROM history_items")
+    suspend fun clearHistory()
+
     @Query("DELETE FROM history_items WHERE id NOT IN (SELECT id FROM history_items ORDER BY visitedAt DESC LIMIT :limit)")
     suspend fun trimHistory(limit: Int = 100)
 }

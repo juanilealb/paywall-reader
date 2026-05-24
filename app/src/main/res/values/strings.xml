@@ -33,6 +33,9 @@
     <string name="empty_read_later_subtitle">Cuando estés leyendo, tocá el marcador para sumar artículos acá.</string>
     <string name="empty_history">Sin historial</string>
     <string name="empty_history_subtitle">Las páginas que abras desde la app aparecen acá.</string>
+    <string name="clear_history">Limpiar historial</string>
+    <string name="clear_history_title">Limpiar historial</string>
+    <string name="clear_history_message">Se van a borrar las páginas recientes de esta app.</string>
     <string name="more_articles">Más artículos</string>
     <string name="history_recent">Reciente</string>
     <string name="mark_read">Marcar como leído</string>

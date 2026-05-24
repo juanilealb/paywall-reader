@@ -28,10 +28,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -46,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,6 +124,7 @@ fun HomeRoute(
         onAddSource = viewModel::addSource,
         onDeleteSource = viewModel::deleteSource,
         onMarkRead = viewModel::markRead,
+        onClearHistory = viewModel::clearHistory,
         existingUrls = uiState.sources.map { it.url }.toSet(),
         modifier = modifier,
     )
@@ -144,10 +148,12 @@ fun HomeScreen(
     onAddSource: (name: String, url: String, folderName: String) -> Unit,
     onDeleteSource: (Source) -> Unit,
     onMarkRead: (String) -> Unit,
+    onClearHistory: () -> Unit,
     existingUrls: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
+    var showClearHistoryConfirmation by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
     var addSourceInitialFolder by rememberSaveable { mutableStateOf("News") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
@@ -223,6 +229,18 @@ fun HomeScreen(
                         title = selectedSection.title,
                         subtitle = selectedSection.subtitle(uiState),
                         compact = compactHeader,
+                        action = if (selectedSection == HomeSection.History && uiState.historyItems.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { showClearHistoryConfirmation = true }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = stringResource(R.string.clear_history),
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
                     )
                 }
 
@@ -440,6 +458,29 @@ fun HomeScreen(
             initialUrl = addSourceInitialUrl,
             initialFolderName = addSourceInitialFolder,
             existingFolders = folders,
+        )
+    }
+
+    if (showClearHistoryConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryConfirmation = false },
+            title = { Text(stringResource(R.string.clear_history_title)) },
+            text = { Text(stringResource(R.string.clear_history_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearHistoryConfirmation = false
+                        onClearHistory()
+                    },
+                ) {
+                    Text(stringResource(R.string.clear_history))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryConfirmation = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
 }
@@ -873,6 +914,14 @@ private fun HistoryListItem(
                 modifier = Modifier.size(32.dp),
             )
         },
+        trailingContent = {
+            Text(
+                text = item.visitedAt.toRelativeTimeLabel(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = modifier
             .fillMaxWidth()
@@ -914,6 +963,17 @@ private fun Calendar.startOfDayMillis(): Long =
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
+private fun Long.toRelativeTimeLabel(now: Long = System.currentTimeMillis()): String {
+    val elapsedMinutes = ((now - this).coerceAtLeast(0L) / 60_000L).toInt()
+    return when {
+        elapsedMinutes < 1 -> "Ahora"
+        elapsedMinutes < 60 -> "${elapsedMinutes}m"
+        elapsedMinutes < 24 * 60 -> "${elapsedMinutes / 60}h"
+        elapsedMinutes < 7 * 24 * 60 -> "${elapsedMinutes / (24 * 60)}d"
+        else -> "${elapsedMinutes / (7 * 24 * 60)}sem"
+    }
+}
+
 private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
     when {
         maxWidth >= 1_200.dp -> HomeLayoutSpec(
@@ -947,6 +1007,7 @@ private fun HomeHeader(
     subtitle: String,
     compact: Boolean,
     modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -954,18 +1015,26 @@ private fun HomeHeader(
             .padding(bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = title,
-            style = if (compact) {
-                MaterialTheme.typography.headlineMedium
-            } else {
-                MaterialTheme.typography.displaySmall
-            },
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = if (compact) {
+                    MaterialTheme.typography.headlineMedium
+                } else {
+                    MaterialTheme.typography.displaySmall
+                },
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            action?.invoke()
+        }
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
@@ -1073,6 +1142,7 @@ private fun HomeScreenPreview() {
             onAddSource = { _, _, _ -> },
             onDeleteSource = {},
             onMarkRead = {},
+            onClearHistory = {},
             existingUrls = emptySet(),
         )
     }

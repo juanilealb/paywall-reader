@@ -74,6 +74,16 @@ class SourceRepositoryTest {
 
         assertTrue(sourceDao.entities.value.isEmpty())
     }
+
+    @Test
+    fun `clearHistory removes all history items`() = runTest {
+        repository.recordVisit("First", "https://example.com/first", "Example")
+        repository.recordVisit("Second", "https://example.com/second", "Example")
+
+        repository.clearHistory()
+
+        assertTrue(sourceDao.historyItems.value.isEmpty())
+    }
 }
 
 private class FakeSourceDao : SourceDao {
@@ -130,6 +140,10 @@ private class FakeSourceDao : SourceDao {
         val entity = item.copy(id = item.id.takeIf { it != 0L } ?: nextHistoryId++)
         historyItems.value = historyItems.value + entity
         return entity.id
+    }
+
+    override suspend fun clearHistory() {
+        historyItems.value = emptyList()
     }
 
     override suspend fun trimHistory(limit: Int) {

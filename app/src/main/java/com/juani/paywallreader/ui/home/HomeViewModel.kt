@@ -64,6 +64,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             repository.recordVisit(title, url, sourceName)
         }
     }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            repository.clearHistory()
+        }
+    }
 }
 
 data class HomeUiState(
