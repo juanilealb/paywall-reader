@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,9 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -681,51 +679,101 @@ private fun SectionSelector(
     historyCount: Int,
     modifier: Modifier = Modifier,
 ) {
-    NavigationBar(
-        modifier = modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 3.dp,
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        HomeSection.entries.forEach { section ->
-            val selected = selectedSection == section
-            val count = when (section) {
-                HomeSection.Sources -> 0
-                HomeSection.ReadLater -> readingCount
-                HomeSection.History -> historyCount
+        Surface(
+            modifier = Modifier.widthIn(max = 420.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(76.dp)
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HomeSection.entries.forEach { section ->
+                    val selected = selectedSection == section
+                    val count = when (section) {
+                        HomeSection.Sources -> 0
+                        HomeSection.ReadLater -> readingCount
+                        HomeSection.History -> historyCount
+                    }
+                    SectionSelectorItem(
+                        section = section,
+                        selected = selected,
+                        count = count,
+                        onClick = { onSectionSelected(section) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-            NavigationBarItem(
-                selected = selected,
-                onClick = { onSectionSelected(section) },
-                icon = {
-                    BadgedBox(
-                        badge = {
-                            if (count > 0) {
-                                Badge {
-                                    Text(count.coerceAtMost(99).toString())
-                                }
-                            }
-                        },
-                    ) {
-                        Icon(
-                            imageVector = section.icon,
-                            contentDescription = null,
-                        )
+        }
+    }
+}
+
+@Composable
+private fun SectionSelectorItem(
+    section: HomeSection,
+    selected: Boolean,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        Color.Transparent
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = modifier.height(64.dp),
+        shape = MaterialTheme.shapes.large,
+        color = containerColor,
+        contentColor = contentColor,
+        onClick = onClick,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            BadgedBox(
+                badge = {
+                    if (count > 0) {
+                        Badge {
+                            Text(count.coerceAtMost(99).toString())
+                        }
                     }
                 },
-                label = {
-                    Text(
-                        text = section.shortTitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
+            ) {
+                Icon(
+                    imageVector = section.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Text(
+                text = section.shortTitle,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

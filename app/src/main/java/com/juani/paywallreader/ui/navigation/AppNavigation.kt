@@ -186,11 +186,11 @@ private fun ReaderPlaceholder(
     ) {
         Box(
             modifier = modifier
-                .fillMaxSize()
-                .padding(32.dp),
+                .fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
             Column(
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
