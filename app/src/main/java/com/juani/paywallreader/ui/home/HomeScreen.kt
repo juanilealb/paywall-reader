@@ -1,5 +1,6 @@
 package com.juani.paywallreader.ui.home
 
+import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +48,7 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
 import com.juani.paywallreader.domain.model.Source
@@ -58,7 +61,7 @@ import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = viewModel(),
+    viewModel: HomeViewModel = homeViewModel(),
 ) {
     val sources by viewModel.sources.collectAsState()
 
@@ -69,6 +72,14 @@ fun HomeRoute(
         onDeleteSource = viewModel::deleteSource,
         existingUrls = sources.map { it.url }.toSet(),
         modifier = modifier,
+    )
+}
+
+@Composable
+private fun homeViewModel(): HomeViewModel {
+    val application = LocalContext.current.applicationContext as Application
+    return viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application),
     )
 }
 
