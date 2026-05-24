@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -364,11 +363,8 @@ fun ReaderScreen(
                     .then(
                         if (useVerticalToolbar) {
                             Modifier
-                                .offset(
-                                    x = -FloatingToolbarDefaults.ScreenOffset,
-                                    y = -FloatingToolbarDefaults.ScreenOffset,
-                                )
                                 .padding(WindowInsets.safeDrawing.asPaddingValues())
+                                .padding(end = 16.dp, bottom = 8.dp)
                                 .zIndex(1f)
                         } else {
                             Modifier

@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -221,11 +220,8 @@ private fun ReaderPlaceholder(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(
-                            x = -FloatingToolbarDefaults.ScreenOffset,
-                            y = -FloatingToolbarDefaults.ScreenOffset,
-                        )
                         .padding(WindowInsets.safeDrawing.asPaddingValues())
+                        .padding(end = 16.dp, bottom = 8.dp)
                         .size(64.dp),
                 ) {
                     FloatingToolbarDefaults.VibrantFloatingActionButton(
