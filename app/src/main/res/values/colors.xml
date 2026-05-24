@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paywall_seed">#006C4C</color>
+    <color name="paywall_primary">#006C4C</color>
+    <color name="paywall_on_primary">#FFFFFF</color>
+    <color name="paywall_secondary">#4C6358</color>
+    <color name="paywall_tertiary">#3F6374</color>
+    <color name="paywall_surface">#FBFDF8</color>
+    <color name="paywall_background">#FBFDF8</color>
+    <color name="paywall_error">#BA1A1A</color>
+</resources>

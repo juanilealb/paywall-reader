@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">PaywallReader</string>
+    <string name="home_title">Mis Fuentes</string>
+    <string name="add_source">Agregar fuente</string>
+    <string name="source_name">Nombre</string>
+    <string name="source_url">URL</string>
+    <string name="save">Guardar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="delete">Eliminar</string>
+    <string name="reader_loading">Cargando sin paywall…</string>
+    <string name="empty_sources">No tenés fuentes todavía</string>
+    <string name="empty_sources_subtitle">Tocá + para agregar un diario o portal</string>
+    <string name="default_source_clarin">Clarín</string>
+    <string name="default_source_lanacion">La Nación</string>
+    <string name="default_source_infobae">Infobae</string>
+    <string name="default_source_ambito">Ámbito Financiero</string>
+    <string name="default_source_pagina12">Página 12</string>
+</resources>

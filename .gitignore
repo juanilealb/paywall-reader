@@ -1,0 +1,38 @@
+# Project level
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.idea/caches
+.idea/libraries
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/inspectionProfiles/
+.idea/dictionaries
+
+# Keystore files
+*.jks
+*.keystore
+
+# External native build
+.cxx/
+.externalNativeBuild
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Captures
+captures/
+
+# App level
+app/build/
+app/release/
+app/debug/
