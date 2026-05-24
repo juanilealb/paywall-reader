@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.Icon
@@ -55,6 +55,8 @@ import com.juani.paywallreader.ui.home.HomeRoute
 import com.juani.paywallreader.ui.reader.ReaderRoute
 import com.juani.paywallreader.ui.theme.PaywallReaderMotion
 import kotlinx.serialization.Serializable
+
+private val FoldFloatingActionButtonSize = 64.dp
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -222,7 +224,8 @@ private fun ReaderPlaceholder(
                         .align(Alignment.BottomEnd)
                         .padding(WindowInsets.safeDrawing.asPaddingValues())
                         .padding(end = 16.dp, bottom = 8.dp)
-                        .size(64.dp),
+                        .size(FoldFloatingActionButtonSize),
+                    contentAlignment = Alignment.Center,
                 ) {
                     FloatingToolbarDefaults.VibrantFloatingActionButton(
                         onClick = onAddSource,

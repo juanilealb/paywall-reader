@@ -74,6 +74,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
 import java.io.ByteArrayInputStream
 
+private val FoldFloatingActionButtonSize = 64.dp
+
 @Composable
 fun ReaderRoute(
     sourceName: String,
@@ -486,21 +488,26 @@ private fun ReaderRefreshFab(
     collapsed: Boolean = false,
     onClick: () -> Unit,
 ) {
-    FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
-        Icon(
-            imageVector = when {
-                collapsed -> Icons.Rounded.KeyboardArrowUp
-                isLoading -> Icons.Rounded.Close
-                else -> Icons.Rounded.Refresh
-            },
-            contentDescription = stringResource(
-                when {
-                    collapsed -> R.string.reader_expand_toolbar
-                    isLoading -> R.string.reader_stop_loading
-                    else -> R.string.reader_refresh
+    Box(
+        modifier = Modifier.size(FoldFloatingActionButtonSize),
+        contentAlignment = Alignment.Center,
+    ) {
+        FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
+            Icon(
+                imageVector = when {
+                    collapsed -> Icons.Rounded.KeyboardArrowUp
+                    isLoading -> Icons.Rounded.Close
+                    else -> Icons.Rounded.Refresh
                 },
-            ),
-        )
+                contentDescription = stringResource(
+                    when {
+                        collapsed -> R.string.reader_expand_toolbar
+                        isLoading -> R.string.reader_stop_loading
+                        else -> R.string.reader_refresh
+                    },
+                ),
+            )
+        }
     }
 }
 
