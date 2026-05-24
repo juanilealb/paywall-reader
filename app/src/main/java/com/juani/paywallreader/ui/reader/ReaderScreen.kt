@@ -9,6 +9,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -790,6 +791,41 @@ private fun WebView.applySiteChromeCleanup() {
                 position: static !important;
                 touch-action: auto !important;
               }
+              html.paywall-reader-wired-light,
+              html.paywall-reader-wired-light body,
+              html.paywall-reader-wired-light main,
+              html.paywall-reader-wired-light article,
+              html.paywall-reader-wired-light section {
+                color-scheme: light !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+              }
+              html.paywall-reader-wired-light,
+              html.paywall-reader-wired-light body,
+              html.paywall-reader-wired-light main {
+                background: #ffffff !important;
+              }
+              html.paywall-reader-wired-light :where([class*="Ad"], [class*="ad-"], [class*="ad_"], [class*=" ad"], .ad) {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                pointer-events: none !important;
+              }
+              html.paywall-reader-wired-light :where(h1, h2, h3, h4, h5, h6, p, a, span, li, time, figcaption, small, strong, em, button, label) {
+                position: relative !important;
+                z-index: 2147483647 !important;
+                background: transparent !important;
+                color: #111111 !important;
+                -webkit-text-fill-color: #111111 !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+                text-shadow: none !important;
+                -webkit-text-stroke-width: 0 !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+              }
             `;
             document.head.appendChild(style);
           }
@@ -854,6 +890,22 @@ private fun WebView.applySiteChromeCleanup() {
                 element.style.position = 'static';
                 element.style.touchAction = 'auto';
               });
+          } else {
+            document.documentElement.classList.remove('paywall-reader-economist-unlocked');
+          }
+
+          if (location.hostname.indexOf('wired.com') !== -1) {
+            document.documentElement.classList.add('paywall-reader-wired-light');
+            document.documentElement.style.colorScheme = 'light';
+            if (document.body) {
+              document.body.style.colorScheme = 'light';
+            }
+          } else {
+            document.documentElement.classList.remove('paywall-reader-wired-light');
+            document.documentElement.style.colorScheme = '';
+            if (document.body) {
+              document.body.style.colorScheme = '';
+            }
           }
         })();
         """.trimIndent(),
@@ -983,6 +1035,13 @@ private fun WebView.configureReaderSettings() {
     settings.allowFileAccess = false
     settings.allowContentAccess = false
     settings.javaScriptCanOpenWindowsAutomatically = false
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        @Suppress("DEPRECATION")
+        settings.forceDark = WebSettings.FORCE_DARK_OFF
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        settings.isAlgorithmicDarkeningAllowed = false
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         settings.safeBrowsingEnabled = true
     }
