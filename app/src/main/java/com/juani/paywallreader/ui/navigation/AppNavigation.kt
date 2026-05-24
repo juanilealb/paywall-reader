@@ -22,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth
+import androidx.compose.material3.adaptive.layout.PaneExpansionAnchor
+import androidx.compose.material3.adaptive.layout.rememberPaneExpansionState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
@@ -52,8 +54,13 @@ fun AppNavigation() {
         calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(windowAdaptiveInfo)
             .copy(horizontalPartitionSpacerSize = 0.dp)
     }
+    val listDetailPaneExpansionState = rememberPaneExpansionState(
+        anchors = listOf(PaneExpansionAnchor.Proportion(0.33f)),
+        initialAnchoredIndex = 0,
+    )
     val listDetailStrategy = rememberListDetailSceneStrategy<NavKey>(
         directive = listDetailDirective,
+        paneExpansionState = listDetailPaneExpansionState,
     )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {

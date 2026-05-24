@@ -11,16 +11,12 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
@@ -96,15 +92,7 @@ fun HomeScreen(
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedFilter by rememberSaveable { mutableStateOf(SourceFilter.All) }
     val clipboardManager = LocalClipboardManager.current
-    val filteredSources = remember(sources, selectedFilter) {
-        when (selectedFilter) {
-            SourceFilter.All -> sources
-            SourceFilter.Defaults -> sources.filter { it.isDefault }
-            SourceFilter.Custom -> sources.filterNot { it.isDefault }
-        }
-    }
 
     BackHandler(fabMenuExpanded) {
         fabMenuExpanded = false
@@ -166,8 +154,7 @@ fun HomeScreen(
         ) {
             val layoutSpec = rememberHomeLayoutSpec(maxWidth)
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = layoutSpec.cardMinWidth),
+            LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = layoutSpec.horizontalPadding,
@@ -175,25 +162,14 @@ fun HomeScreen(
                     end = layoutSpec.horizontalPadding,
                     bottom = layoutSpec.bottomPadding,
                 ),
-                horizontalArrangement = Arrangement.spacedBy(layoutSpec.itemSpacing),
                 verticalArrangement = Arrangement.spacedBy(layoutSpec.itemSpacing),
             ) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    HomeHeader()
+                item {
+                    HomeHeader(compact = maxWidth < 480.dp)
                 }
 
-                if (sources.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SourceFilterBar(
-                            selectedFilter = selectedFilter,
-                            onFilterSelected = { selectedFilter = it },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-
-                if (filteredSources.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                if (sources.isEmpty()) {
+                    item {
                         EmptySources(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -202,7 +178,7 @@ fun HomeScreen(
                     }
                 } else {
                     items(
-                        items = filteredSources,
+                        items = sources,
                         key = { it.id },
                     ) { source ->
                         SourceCard(
@@ -238,14 +214,7 @@ fun HomeScreen(
     }
 }
 
-private enum class SourceFilter {
-    All,
-    Defaults,
-    Custom,
-}
-
 private data class HomeLayoutSpec(
-    val cardMinWidth: Dp,
     val horizontalPadding: Dp,
     val topPadding: Dp,
     val bottomPadding: Dp,
@@ -256,81 +225,41 @@ private data class HomeLayoutSpec(
 private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
     when {
         maxWidth >= 1_200.dp -> HomeLayoutSpec(
-            cardMinWidth = 248.dp,
             horizontalPadding = 40.dp,
             topPadding = 32.dp,
             bottomPadding = 112.dp,
-            itemSpacing = 18.dp,
+            itemSpacing = 10.dp,
             emptyStateTopPadding = 96.dp,
         )
 
         maxWidth >= 840.dp -> HomeLayoutSpec(
-            cardMinWidth = 232.dp,
-            horizontalPadding = 32.dp,
+            horizontalPadding = 20.dp,
             topPadding = 28.dp,
             bottomPadding = 108.dp,
-            itemSpacing = 16.dp,
+            itemSpacing = 10.dp,
             emptyStateTopPadding = 72.dp,
         )
 
         maxWidth >= 600.dp -> HomeLayoutSpec(
-            cardMinWidth = 220.dp,
-            horizontalPadding = 24.dp,
+            horizontalPadding = 20.dp,
             topPadding = 24.dp,
             bottomPadding = 104.dp,
-            itemSpacing = 16.dp,
+            itemSpacing = 10.dp,
             emptyStateTopPadding = 64.dp,
         )
 
         else -> HomeLayoutSpec(
-            cardMinWidth = 168.dp,
             horizontalPadding = 18.dp,
             topPadding = 18.dp,
             bottomPadding = 104.dp,
-            itemSpacing = 14.dp,
+            itemSpacing = 10.dp,
             emptyStateTopPadding = 48.dp,
         )
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun SourceFilterBar(
-    selectedFilter: SourceFilter,
-    onFilterSelected: (SourceFilter) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val allLabel = stringResource(R.string.source_filter_all)
-    val defaultsLabel = stringResource(R.string.source_filter_defaults)
-    val customLabel = stringResource(R.string.source_filter_custom)
-
-    ButtonGroup(
-        overflowIndicator = { menuState ->
-            ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-        },
-        modifier = modifier.padding(bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.All) },
-            label = allLabel,
-            enabled = selectedFilter != SourceFilter.All,
-        )
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.Defaults) },
-            label = defaultsLabel,
-            enabled = selectedFilter != SourceFilter.Defaults,
-        )
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.Custom) },
-            label = customLabel,
-            enabled = selectedFilter != SourceFilter.Custom,
-        )
     }
-}
 
 @Composable
 private fun HomeHeader(
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -341,7 +270,11 @@ private fun HomeHeader(
     ) {
         Text(
             text = stringResource(R.string.home_title),
-            style = MaterialTheme.typography.displaySmall,
+            style = if (compact) {
+                MaterialTheme.typography.headlineSmall
+            } else {
+                MaterialTheme.typography.displaySmall
+            },
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )

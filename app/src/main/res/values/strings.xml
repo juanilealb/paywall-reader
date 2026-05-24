@@ -21,9 +21,6 @@
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
     <string name="source_options">Opciones de fuente</string>
     <string name="default_source_label">Default</string>
-    <string name="source_filter_all">Todas</string>
-    <string name="source_filter_defaults">Default</string>
-    <string name="source_filter_custom">Mías</string>
     <string name="reader_loading">Cargando sin paywall…</string>
     <string name="reader_error_title">No se pudo cargar</string>
     <string name="reader_error_message">Revisá la conexión o probá abrir la página original.</string>
