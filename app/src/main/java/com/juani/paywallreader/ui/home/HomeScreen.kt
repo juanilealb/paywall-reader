@@ -201,8 +201,10 @@ fun HomeScreen(
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     val folders = remember(uiState.folders, uiState.sources) {
+        val hasUnfiledSources = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME }
         (uiState.folders + uiState.sources.map { it.folderName })
             .distinct()
+            .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledSources }
             .sortedBy { it.lowercase() }
     }
     val normalizedSearch = searchQuery.trim()

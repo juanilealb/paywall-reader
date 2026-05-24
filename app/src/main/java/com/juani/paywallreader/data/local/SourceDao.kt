@@ -42,6 +42,9 @@ interface SourceDao {
     @Query("SELECT COUNT(*) FROM sources WHERE url = :url")
     suspend fun countByUrl(url: String): Int
 
+    @Query("SELECT COUNT(*) FROM sources WHERE folderName = :folderName")
+    suspend fun countByFolder(folderName: String): Int
+
     @Query("SELECT COUNT(*) FROM sources")
     suspend fun count(): Int
 

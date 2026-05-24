@@ -21,7 +21,11 @@ class SourceRepository(
     }
 
     val folders: Flow<List<String>> = sourceDao.getFolders().map { entities ->
-        entities.map { it.name.normalizedFolderName() }.distinct().sortedBy { it.lowercase() }
+        entities
+            .map { it.name.normalizedFolderName() }
+            .distinct()
+            .filterNot { it == UNFILED_FOLDER_NAME && sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 }
+            .sortedBy { it.lowercase() }
     }
 
     val readingItems: Flow<List<ReadingItem>> = sourceDao.getReadingItems().map { entities ->
@@ -51,7 +55,10 @@ class SourceRepository(
     }
 
     suspend fun createFolder(folderName: String) {
-        sourceDao.insertFolder(FolderEntity(name = folderName.normalizedFolderName()))
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName != UNFILED_FOLDER_NAME) {
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        }
     }
 
     suspend fun deleteFolder(folderName: String) {
@@ -80,10 +87,12 @@ class SourceRepository(
             url = normalizedUrl,
             folderName = normalizedFolderName,
         )
+        pruneEmptyUnfiledFolder()
     }
 
     suspend fun deleteSource(source: Source) {
         sourceDao.delete(source.toEntity())
+        pruneEmptyUnfiledFolder()
     }
 
     suspend fun saveForLater(title: String, url: String, sourceName: String) {
@@ -122,6 +131,12 @@ class SourceRepository(
 
     suspend fun clearHistory() {
         sourceDao.clearHistory()
+    }
+
+    private suspend fun pruneEmptyUnfiledFolder() {
+        if (sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0) {
+            sourceDao.deleteFolder(UNFILED_FOLDER_NAME)
+        }
     }
 }
 

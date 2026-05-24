@@ -55,6 +55,13 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `createFolder ignores unfiled ghost folder`() = runTest {
+        repository.createFolder(UNFILED_FOLDER_NAME)
+
+        assertTrue(sourceDao.folders.value.isEmpty())
+    }
+
+    @Test
     fun `deleteFolder moves sources to unfiled and removes folder`() = runTest {
         sourceDao.insertFolder(FolderEntity(name = "Tech"))
         sourceDao.seed(
@@ -127,6 +134,42 @@ class SourceRepositoryTest {
         repository.deleteSource(customSource)
 
         assertTrue(sourceDao.entities.value.isEmpty())
+    }
+
+    @Test
+    fun `deleteSource prunes empty unfiled folder`() = runTest {
+        val customSource = Source(
+            id = 1,
+            name = "Custom",
+            url = "https://custom.com",
+            isDefault = false,
+            folderName = UNFILED_FOLDER_NAME,
+        )
+        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME))
+        sourceDao.seed(customSource.toEntity(createdAt = 1))
+
+        repository.deleteSource(customSource)
+
+        assertTrue(sourceDao.entities.value.isEmpty())
+        assertTrue(sourceDao.folders.value.isEmpty())
+    }
+
+    @Test
+    fun `updateSource prunes unfiled folder when last source moves out`() = runTest {
+        val customSource = Source(
+            id = 1,
+            name = "Custom",
+            url = "https://custom.com",
+            isDefault = false,
+            folderName = UNFILED_FOLDER_NAME,
+        )
+        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME))
+        sourceDao.seed(customSource.toEntity(createdAt = 1))
+
+        repository.updateSource(customSource, "Custom", "https://custom.com", "Tech")
+
+        assertEquals("Tech", sourceDao.entities.value.single().folderName)
+        assertEquals(listOf("Tech"), sourceDao.folders.value.map { it.name })
     }
 
     @Test
@@ -214,6 +257,9 @@ private class FakeSourceDao : SourceDao {
 
     override suspend fun countByUrl(url: String): Int =
         entities.value.count { it.url == url }
+
+    override suspend fun countByFolder(folderName: String): Int =
+        entities.value.count { it.folderName == folderName }
 
     override suspend fun count(): Int = entities.value.size
 
