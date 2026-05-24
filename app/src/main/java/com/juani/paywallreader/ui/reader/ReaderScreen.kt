@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Close
@@ -95,18 +96,26 @@ fun ReaderScreen(
     var hasError by remember { mutableStateOf(false) }
     var canNavigateBack by remember { mutableStateOf(false) }
     var canNavigateForward by remember { mutableStateOf(false) }
+    var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim()) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim()
     }
     val openOriginal = {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl)))
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl })))
     }
     val shareOriginal = {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, sourceUrl)
+            putExtra(Intent.EXTRA_TEXT, currentUrl.ifBlank { sourceUrl })
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share)))
+    }
+    val openReaderVersion = {
+        val url = webView?.url ?: currentUrl.ifBlank { sourceUrl }
+        val uri = Uri.parse(url)
+        if (!uri.isReaderServiceUrl()) {
+            webView?.loadUrl(uri.toArticleReaderUrl())
+        }
     }
     fun updateNavigationState(view: WebView?) {
         canNavigateBack = view?.canGoBack() == true
@@ -151,11 +160,13 @@ fun ReaderScreen(
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 isLoading = true
                                 hasError = false
+                                currentUrl = url ?: currentUrl
                                 updateNavigationState(view)
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
+                                currentUrl = url ?: view?.url ?: currentUrl
                                 updateNavigationState(view)
                                 view?.applyAdCleanup()
                                 if (url?.isRemovePaywallsUrl() == true) {
@@ -168,6 +179,7 @@ fun ReaderScreen(
                                 url: String?,
                                 isReload: Boolean,
                             ) {
+                                currentUrl = url ?: view?.url ?: currentUrl
                                 updateNavigationState(view)
                             }
 
@@ -186,16 +198,7 @@ fun ReaderScreen(
                                     return true
                                 }
 
-                                if (url.host in ALLOWED_READER_HOSTS) {
-                                    return false
-                                }
-
-                                if (!request.hasGesture()) {
-                                    return false
-                                }
-
-                                view?.loadUrl(url.toArticleReaderUrl())
-                                return true
+                                return false
                             }
 
                             override fun onReceivedError(
@@ -287,6 +290,7 @@ fun ReaderScreen(
                     }
                 },
                 onOpenOriginal = openOriginal,
+                onOpenReader = openReaderVersion,
                 onShare = shareOriginal,
                 modifier = Modifier
                     .align(toolbarAlignment)
@@ -318,6 +322,7 @@ private fun ReaderFloatingToolbar(
     onNavigateForward: () -> Unit,
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
+    onOpenReader: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -344,6 +349,7 @@ private fun ReaderFloatingToolbar(
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
                 onOpenOriginal = onOpenOriginal,
+                onOpenReader = onOpenReader,
                 onShare = onShare,
             )
         }
@@ -370,6 +376,7 @@ private fun ReaderFloatingToolbar(
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
                 onOpenOriginal = onOpenOriginal,
+                onOpenReader = onOpenReader,
                 onShare = onShare,
             )
         }
@@ -402,6 +409,7 @@ private fun ReaderToolbarActions(
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
     onOpenOriginal: () -> Unit,
+    onOpenReader: () -> Unit,
     onShare: () -> Unit,
 ) {
     if (showBackButton) {
@@ -434,6 +442,12 @@ private fun ReaderToolbarActions(
         Icon(
             imageVector = Icons.Rounded.OpenInBrowser,
             contentDescription = stringResource(R.string.reader_open_original),
+        )
+    }
+    IconButton(onClick = onOpenReader) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.Article,
+            contentDescription = stringResource(R.string.reader_open_reader),
         )
     }
     if (showShareAction) {
@@ -484,6 +498,8 @@ private fun Uri.toArticleReaderUrl(): String =
 
 private fun String.isRemovePaywallsUrl(): Boolean =
     runCatching { Uri.parse(this).host == REMOVE_PAYWALLS_HOST }.getOrDefault(false)
+
+private fun Uri.isReaderServiceUrl(): Boolean = host in ALLOWED_READER_HOSTS
 
 private fun Uri.isBlockedAdResource(): Boolean {
     val normalizedHost = host?.lowercase().orEmpty()

@@ -21,7 +21,7 @@
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
     <string name="source_options">Opciones de fuente</string>
     <string name="default_source_label">Default</string>
-    <string name="reader_loading">Cargando sin paywall…</string>
+    <string name="reader_loading">Cargando página…</string>
     <string name="reader_error_title">No se pudo cargar</string>
     <string name="reader_error_message">Revisá la conexión o probá abrir la página original.</string>
     <string name="reader_retry">Reintentar</string>
@@ -30,6 +30,7 @@
     <string name="reader_web_back">Página anterior</string>
     <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
+    <string name="reader_open_reader">Abrir sin paywall</string>
     <string name="reader_share">Compartir</string>
     <string name="reader_back">Volver</string>
     <string name="empty_sources">No tenés fuentes todavía</string>
