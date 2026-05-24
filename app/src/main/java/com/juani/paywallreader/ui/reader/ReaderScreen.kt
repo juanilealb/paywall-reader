@@ -32,19 +32,21 @@ import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarHorizontalFabPosition
+import androidx.compose.material3.FloatingToolbarVerticalFabPosition
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalFloatingToolbar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -124,10 +126,11 @@ fun ReaderScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         val toolbarAlignment = if (maxWidth >= 600.dp) {
-            Alignment.BottomEnd
+            Alignment.CenterEnd
         } else {
             Alignment.BottomCenter
         }
+        val useVerticalToolbar = maxWidth >= 840.dp
         val showShareAction = maxWidth >= 380.dp
 
         Box(
@@ -233,7 +236,7 @@ fun ReaderScreen(
             )
 
             if (isLoading && progress in 1..99) {
-                LinearProgressIndicator(
+                LinearWavyProgressIndicator(
                     progress = { progress / 100f },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -264,6 +267,7 @@ fun ReaderScreen(
                 canNavigateBack = canNavigateBack,
                 canNavigateForward = canNavigateForward,
                 isLoading = isLoading,
+                vertical = useVerticalToolbar,
                 showShareAction = showShareAction,
                 onBack = onBack,
                 onNavigateBack = {
@@ -288,7 +292,13 @@ fun ReaderScreen(
                     .align(toolbarAlignment)
                     .padding(WindowInsets.safeDrawing.asPaddingValues())
                     .padding(16.dp)
-                    .widthIn(max = 520.dp),
+                    .then(
+                        if (useVerticalToolbar) {
+                            Modifier
+                        } else {
+                            Modifier.widthIn(max = 520.dp)
+                        },
+                    ),
             )
         }
     }
@@ -301,6 +311,7 @@ private fun ReaderFloatingToolbar(
     canNavigateBack: Boolean,
     canNavigateForward: Boolean,
     isLoading: Boolean,
+    vertical: Boolean,
     showShareAction: Boolean,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -310,64 +321,127 @@ private fun ReaderFloatingToolbar(
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    HorizontalFloatingToolbar(
-        expanded = true,
-        floatingActionButton = {
-            FloatingToolbarDefaults.VibrantFloatingActionButton(
-                onClick = onRefreshOrStop,
-            ) {
-                Icon(
-                    imageVector = if (isLoading) Icons.Rounded.Close else Icons.Rounded.Refresh,
-                    contentDescription = stringResource(
-                        if (isLoading) R.string.reader_stop_loading else R.string.reader_refresh,
-                    ),
+    if (vertical) {
+        VerticalFloatingToolbar(
+            expanded = true,
+            floatingActionButton = {
+                ReaderRefreshFab(
+                    isLoading = isLoading,
+                    onClick = onRefreshOrStop,
                 )
-            }
-        },
-        modifier = modifier,
-        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
-    ) {
-        if (showBackButton) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.reader_back),
-                )
-            }
-        }
-        IconButton(
-            onClick = onNavigateBack,
-            enabled = canNavigateBack,
+            },
+            modifier = modifier,
+            colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            floatingActionButtonPosition = FloatingToolbarVerticalFabPosition.Bottom,
         ) {
+            ReaderToolbarActions(
+                showBackButton = showBackButton,
+                canNavigateBack = canNavigateBack,
+                canNavigateForward = canNavigateForward,
+                showShareAction = showShareAction,
+                onBack = onBack,
+                onNavigateBack = onNavigateBack,
+                onNavigateForward = onNavigateForward,
+                onOpenOriginal = onOpenOriginal,
+                onShare = onShare,
+            )
+        }
+    } else {
+        HorizontalFloatingToolbar(
+            expanded = true,
+            floatingActionButton = {
+                ReaderRefreshFab(
+                    isLoading = isLoading,
+                    onClick = onRefreshOrStop,
+                )
+            },
+            modifier = modifier,
+            colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
+        ) {
+            ReaderToolbarActions(
+                showBackButton = showBackButton,
+                canNavigateBack = canNavigateBack,
+                canNavigateForward = canNavigateForward,
+                showShareAction = showShareAction,
+                onBack = onBack,
+                onNavigateBack = onNavigateBack,
+                onNavigateForward = onNavigateForward,
+                onOpenOriginal = onOpenOriginal,
+                onShare = onShare,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ReaderRefreshFab(
+    isLoading: Boolean,
+    onClick: () -> Unit,
+) {
+    FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
+        Icon(
+            imageVector = if (isLoading) Icons.Rounded.Close else Icons.Rounded.Refresh,
+            contentDescription = stringResource(
+                if (isLoading) R.string.reader_stop_loading else R.string.reader_refresh,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun ReaderToolbarActions(
+    showBackButton: Boolean,
+    canNavigateBack: Boolean,
+    canNavigateForward: Boolean,
+    showShareAction: Boolean,
+    onBack: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateForward: () -> Unit,
+    onOpenOriginal: () -> Unit,
+    onShare: () -> Unit,
+) {
+    if (showBackButton) {
+        IconButton(onClick = onBack) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.reader_web_back),
+                contentDescription = stringResource(R.string.reader_back),
             )
         }
-        IconButton(
-            onClick = onNavigateForward,
-            enabled = canNavigateForward,
-        ) {
+    }
+    IconButton(
+        onClick = onNavigateBack,
+        enabled = canNavigateBack,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = stringResource(R.string.reader_web_back),
+        )
+    }
+    IconButton(
+        onClick = onNavigateForward,
+        enabled = canNavigateForward,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+            contentDescription = stringResource(R.string.reader_web_forward),
+        )
+    }
+    IconButton(onClick = onOpenOriginal) {
+        Icon(
+            imageVector = Icons.Rounded.OpenInBrowser,
+            contentDescription = stringResource(R.string.reader_open_original),
+        )
+    }
+    if (showShareAction) {
+        IconButton(onClick = onShare) {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = stringResource(R.string.reader_web_forward),
+                imageVector = Icons.Rounded.Share,
+                contentDescription = stringResource(R.string.reader_share),
             )
-        }
-        IconButton(onClick = onOpenOriginal) {
-            Icon(
-                imageVector = Icons.Rounded.OpenInBrowser,
-                contentDescription = stringResource(R.string.reader_open_original),
-            )
-        }
-        if (showShareAction) {
-            IconButton(onClick = onShare) {
-                Icon(
-                    imageVector = Icons.Rounded.Share,
-                    contentDescription = stringResource(R.string.reader_share),
-                )
-            }
         }
     }
 }
@@ -428,6 +502,7 @@ private fun emptyWebResponse(): WebResourceResponse =
         ByteArrayInputStream(ByteArray(0)),
     )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingState(
     modifier: Modifier = Modifier,
@@ -443,7 +518,7 @@ private fun LoadingState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CircularProgressIndicator()
+            LoadingIndicator()
             Text(
                 text = stringResource(R.string.reader_loading),
                 style = MaterialTheme.typography.labelLarge,
