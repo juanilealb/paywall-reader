@@ -1,50 +1,65 @@
 package com.juani.paywallreader.ui.home
 
 import android.app.Application
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Newspaper
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButtonMenu
-import androidx.compose.material3.FloatingActionButtonMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,8 +77,8 @@ import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
@@ -131,66 +146,45 @@ fun HomeScreen(
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
-    var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
+    var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val folders = remember(uiState.sources) {
         uiState.sources.map { it.folderName }.distinct().sorted()
     }
-    val visibleSources = remember(uiState.sources, selectedFolder) {
-        selectedFolder?.let { folder -> uiState.sources.filter { it.folderName == folder } } ?: uiState.sources
+    val normalizedSearch = searchQuery.trim()
+    val visibleSources = remember(uiState.sources, selectedFolder, normalizedSearch) {
+        uiState.sources
+            .asSequence()
+            .filter { source -> selectedFolder == null || source.folderName == selectedFolder }
+            .filter { source ->
+                normalizedSearch.isBlank() ||
+                    source.name.contains(normalizedSearch, ignoreCase = true) ||
+                    source.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
+            }
+            .toList()
     }
-
-    BackHandler(fabMenuExpanded) {
-        fabMenuExpanded = false
+    val visibleReadingItems = remember(uiState.readingItems, normalizedSearch) {
+        uiState.readingItems.filter { item ->
+            normalizedSearch.isBlank() ||
+                item.title.contains(normalizedSearch, ignoreCase = true) ||
+                item.sourceName.contains(normalizedSearch, ignoreCase = true) ||
+                item.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
+        }
+    }
+    val visibleHistoryItems = remember(uiState.historyItems, normalizedSearch) {
+        uiState.historyItems.filter { item ->
+            normalizedSearch.isBlank() ||
+                item.title.contains(normalizedSearch, ignoreCase = true) ||
+                item.sourceName.contains(normalizedSearch, ignoreCase = true) ||
+                item.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
+        }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        floatingActionButton = {
-            FloatingActionButtonMenu(
-                expanded = fabMenuExpanded,
-                button = {
-                    ToggleFloatingActionButton(
-                        checked = fabMenuExpanded,
-                        onCheckedChange = { fabMenuExpanded = !fabMenuExpanded },
-                    ) {
-                        Icon(
-                            imageVector = if (fabMenuExpanded) Icons.Rounded.Close else Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.add_source),
-                        )
-                    }
-                },
-            ) {
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        fabMenuExpanded = false
-                        addSourceInitialUrl = ""
-                        showAddSourceSheet = true
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = null,
-                        )
-                    },
-                    text = { Text(stringResource(R.string.add_source)) },
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        fabMenuExpanded = false
-                        addSourceInitialUrl = clipboardManager.getText()?.text.orEmpty()
-                        showAddSourceSheet = true
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.ContentPaste,
-                            contentDescription = null,
-                        )
-                    },
-                    text = { Text(stringResource(R.string.add_source_from_clipboard)) },
-                )
-            }
-        },
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -199,6 +193,7 @@ fun HomeScreen(
                 .consumeWindowInsets(paddingValues),
         ) {
             val layoutSpec = rememberHomeLayoutSpec(maxWidth)
+            val compactHeader = maxWidth < 480.dp
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -206,93 +201,206 @@ fun HomeScreen(
                     start = layoutSpec.horizontalPadding,
                     top = layoutSpec.topPadding,
                     end = layoutSpec.horizontalPadding,
-                    bottom = layoutSpec.bottomPadding,
+                    bottom = layoutSpec.bottomPadding + 86.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(layoutSpec.itemSpacing),
             ) {
                 item {
-                    HomeHeader(compact = maxWidth < 480.dp)
+                    HomeHeader(
+                        title = selectedSection.title,
+                        subtitle = selectedSection.subtitle(uiState),
+                        compact = compactHeader,
+                    )
                 }
 
-                if (folders.isNotEmpty()) {
-                    item {
-                        FolderChips(
-                            folders = folders,
-                            selectedFolder = selectedFolder,
-                            onFolderSelected = { selectedFolder = it },
-                        )
-                    }
+                item {
+                    SearchPill(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = selectedSection.searchPlaceholder,
+                    )
                 }
 
-                if (uiState.readingItems.isNotEmpty()) {
-                    item {
-                        SectionHeader(
-                            icon = Icons.Rounded.Bookmark,
-                            title = stringResource(R.string.read_later),
-                            count = uiState.readingItems.size,
-                        )
-                    }
-                    items(
-                        items = uiState.readingItems,
-                        key = { "read-${it.id}" },
-                    ) { item ->
-                        ReadingListItem(
-                            item = item,
-                            onClick = { onReadingItemClick(item) },
-                            onMarkRead = { onMarkRead(item.url) },
-                        )
-                    }
-                }
+                when (selectedSection) {
+                    HomeSection.Sources -> {
+                        if (folders.isNotEmpty()) {
+                            item {
+                                FolderChips(
+                                    folders = folders,
+                                    selectedFolder = selectedFolder,
+                                    onFolderSelected = { selectedFolder = it },
+                                    onNewFolder = {
+                                        addSourceInitialUrl = ""
+                                        showAddSourceSheet = true
+                                    },
+                                )
+                            }
+                        }
 
-                if (visibleSources.isEmpty() && uiState.readingItems.isEmpty()) {
-                    item {
-                        EmptySources(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = layoutSpec.emptyStateTopPadding),
-                        )
-                    }
-                } else {
-                    if (visibleSources.isNotEmpty()) {
-                        item {
-                            SectionHeader(
-                                icon = Icons.Rounded.Folder,
-                                title = selectedFolder ?: stringResource(R.string.all_sources),
-                                count = visibleSources.size,
-                            )
+                        if (visibleSources.isEmpty()) {
+                            item {
+                                EmptyState(
+                                    icon = Icons.Rounded.Folder,
+                                    title = if (searchQuery.isBlank()) {
+                                        stringResource(R.string.empty_sources)
+                                    } else {
+                                        stringResource(R.string.empty_search_title)
+                                    },
+                                    body = if (searchQuery.isBlank()) {
+                                        stringResource(R.string.empty_sources_subtitle)
+                                    } else {
+                                        stringResource(R.string.empty_search_subtitle)
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = layoutSpec.emptyStateTopPadding),
+                                )
+                            }
+                        } else {
+                            item {
+                                SectionHeader(
+                                    title = selectedFolder ?: stringResource(R.string.all_sources),
+                                    count = visibleSources.size,
+                                )
+                            }
+                            items(
+                                items = visibleSources,
+                                key = { "source-${it.id}" },
+                            ) { source ->
+                                SourceCard(
+                                    source = source,
+                                    onClick = onSourceClick,
+                                    onDelete = onDeleteSource,
+                                    deleteLabel = stringResource(R.string.delete),
+                                )
+                            }
                         }
                     }
-                    items(
-                        items = visibleSources,
-                        key = { "source-${it.id}" },
-                    ) { source ->
-                        SourceCard(
-                            source = source,
-                            onClick = onSourceClick,
-                            onDelete = onDeleteSource,
-                            deleteLabel = stringResource(R.string.delete),
-                        )
-                    }
-                }
 
-                if (uiState.historyItems.isNotEmpty()) {
-                    item {
-                        SectionHeader(
-                            icon = Icons.Rounded.History,
-                            title = stringResource(R.string.history),
-                            count = uiState.historyItems.size,
-                        )
+                    HomeSection.ReadLater -> {
+                        if (visibleReadingItems.isEmpty()) {
+                            item {
+                                EmptyState(
+                                    icon = Icons.Rounded.Bookmark,
+                                    title = stringResource(R.string.empty_read_later),
+                                    body = stringResource(R.string.empty_read_later_subtitle),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = layoutSpec.emptyStateTopPadding),
+                                )
+                            }
+                        } else {
+                            item {
+                                ReadLaterHero(
+                                    item = visibleReadingItems.first(),
+                                    onClick = { onReadingItemClick(visibleReadingItems.first()) },
+                                    onMarkRead = { onMarkRead(visibleReadingItems.first().url) },
+                                )
+                            }
+                            val rest = visibleReadingItems.drop(1)
+                            if (rest.isNotEmpty()) {
+                                item {
+                                    SectionHeader(
+                                        title = stringResource(R.string.more_articles),
+                                        count = rest.size,
+                                    )
+                                }
+                                items(
+                                    items = rest,
+                                    key = { "read-${it.id}" },
+                                ) { item ->
+                                    ReadingListItem(
+                                        item = item,
+                                        onClick = { onReadingItemClick(item) },
+                                        onMarkRead = { onMarkRead(item.url) },
+                                    )
+                                }
+                            }
+                        }
                     }
-                    items(
-                        items = uiState.historyItems.take(12),
-                        key = { "history-${it.id}" },
-                    ) { item ->
-                        HistoryListItem(
-                            item = item,
-                            onClick = { onHistoryItemClick(item) },
-                        )
+
+                    HomeSection.History -> {
+                        if (visibleHistoryItems.isEmpty()) {
+                            item {
+                                EmptyState(
+                                    icon = Icons.Rounded.History,
+                                    title = stringResource(R.string.empty_history),
+                                    body = stringResource(R.string.empty_history_subtitle),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = layoutSpec.emptyStateTopPadding),
+                                )
+                            }
+                        } else {
+                            item {
+                                SectionHeader(
+                                    title = stringResource(R.string.history_recent),
+                                    count = visibleHistoryItems.size,
+                                )
+                            }
+                            items(
+                                items = visibleHistoryItems.take(30),
+                                key = { "history-${it.id}" },
+                            ) { item ->
+                                HistoryListItem(
+                                    item = item,
+                                    onClick = { onHistoryItemClick(item) },
+                                )
+                            }
+                        }
                     }
                 }
+            }
+
+            FloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        val clipboardText = clipboard
+                            .getClipEntry()
+                            ?.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                        addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
+                        showAddSourceSheet = true
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(end = layoutSpec.horizontalPadding, bottom = 82.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = stringResource(R.string.add_source),
+                )
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 3.dp,
+            ) {
+                SectionSelector(
+                    selectedSection = selectedSection,
+                    onSectionSelected = {
+                        selectedSection = it
+                        searchQuery = ""
+                    },
+                    readingCount = uiState.readingItems.size,
+                    historyCount = uiState.historyItems.size,
+                    modifier = Modifier.padding(
+                        start = layoutSpec.horizontalPadding,
+                        top = 10.dp,
+                        end = layoutSpec.horizontalPadding,
+                        bottom = 10.dp,
+                    ),
+                )
             }
         }
     }
@@ -319,29 +427,157 @@ fun HomeScreen(
     }
 }
 
+private enum class HomeSection(
+    val title: String,
+    val shortTitle: String,
+    val icon: ImageVector,
+    val searchPlaceholder: String,
+) {
+    Sources(
+        title = "Fuentes",
+        shortTitle = "Webs",
+        icon = Icons.Rounded.Newspaper,
+        searchPlaceholder = "Buscar fuente",
+    ),
+    ReadLater(
+        title = "Para leer",
+        shortTitle = "Leer",
+        icon = Icons.Rounded.Bookmark,
+        searchPlaceholder = "Buscar lectura",
+    ),
+    History(
+        title = "Historial",
+        shortTitle = "Hist.",
+        icon = Icons.Rounded.History,
+        searchPlaceholder = "Buscar historial",
+    );
+
+    fun subtitle(uiState: HomeUiState): String =
+        when (this) {
+            Sources -> "${uiState.sources.size} sitios guardados"
+            ReadLater -> "${uiState.readingItems.size} artículos guardados"
+            History -> "Últimos ${uiState.historyItems.size} artículos"
+        }
+}
+
 @Composable
-private fun FolderChips(
-    folders: List<String>,
-    selectedFolder: String?,
-    onFolderSelected: (String?) -> Unit,
+private fun SectionSelector(
+    selectedSection: HomeSection,
+    onSectionSelected: (HomeSection) -> Unit,
+    readingCount: Int,
+    historyCount: Int,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilterChip(
-            selected = selectedFolder == null,
-            onClick = { onFolderSelected(null) },
-            label = { Text(stringResource(R.string.all_sources)) },
-        )
-        folders.take(3).forEach { folder ->
-            FilterChip(
-                selected = selectedFolder == folder,
-                onClick = { onFolderSelected(folder) },
-                label = { Text(folder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Rounded.Folder, contentDescription = null)
+        HomeSection.entries.forEach { section ->
+            val selected = selectedSection == section
+            val count = when (section) {
+                HomeSection.Sources -> 0
+                HomeSection.ReadLater -> readingCount
+                HomeSection.History -> historyCount
+            }
+            Surface(
+                onClick = { onSectionSelected(section) },
+                modifier = Modifier.weight(1f),
+                shape = CircleShape,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+                contentColor = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                tonalElevation = if (selected) 2.dp else 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            imageVector = section.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(19.dp),
+                        )
+                        Text(
+                            text = if (count > 0) {
+                                "${section.shortTitle} ${count.coerceAtMost(99)}"
+                            } else {
+                                section.shortTitle
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchPill(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
+                ),
+                modifier = Modifier.weight(1f),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isBlank()) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
                 },
             )
         }
@@ -349,8 +585,68 @@ private fun FolderChips(
 }
 
 @Composable
+private fun FolderChips(
+    folders: List<String>,
+    selectedFolder: String?,
+    onFolderSelected: (String?) -> Unit,
+    onNewFolder: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            FilterChip(
+                selected = selectedFolder == null,
+                onClick = { onFolderSelected(null) },
+                label = { Text(stringResource(R.string.all_sources)) },
+            )
+        }
+        items(folders, key = { it }) { folder ->
+            FilterChip(
+                selected = selectedFolder == folder,
+                onClick = { onFolderSelected(folder) },
+                label = { Text(folder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = {
+                    FolderDot(folderName = folder)
+                },
+            )
+        }
+        item {
+            FilterChip(
+                selected = false,
+                onClick = onNewFolder,
+                label = { Text(stringResource(R.string.new_folder)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FolderDot(
+    folderName: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = listOf(
+        MaterialTheme.colorScheme.primary,
+        MaterialTheme.colorScheme.tertiary,
+        MaterialTheme.colorScheme.secondary,
+        MaterialTheme.colorScheme.error,
+    )
+    Box(
+        modifier = modifier
+            .size(9.dp)
+            .clip(CircleShape)
+            .background(colors[kotlin.math.abs(folderName.hashCode()) % colors.size]),
+    )
+}
+
+@Composable
 private fun SectionHeader(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     count: Int,
     modifier: Modifier = Modifier,
@@ -358,22 +654,82 @@ private fun SectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 2.dp),
+            .padding(top = 10.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = count.toString(),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun ReadLaterHero(
+    item: ReadingItem,
+    onClick: () -> Unit,
+    onMarkRead: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BrowserFavicon(url = item.url, fallbackText = item.sourceName)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.sourceName.ifBlank { item.url.toDisplayHost() },
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = item.url.toDisplayHost(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = onMarkRead) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = stringResource(R.string.mark_read),
+                    )
+                }
+            }
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -387,30 +743,32 @@ private fun ReadingListItem(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.48f),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         ListItem(
             headlineContent = {
-                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
             },
             supportingContent = {
-                Text(item.url.toDisplayHost(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             },
             leadingContent = {
                 BrowserFavicon(url = item.url, fallbackText = item.title)
             },
             trailingContent = {
-                androidx.compose.material3.IconButton(onClick = onMarkRead) {
+                IconButton(onClick = onMarkRead) {
                     Icon(
                         imageVector = Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.mark_read),
                     )
                 }
             },
-            colors = androidx.compose.material3.ListItemDefaults.colors(
-                containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            ),
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
     }
 }
@@ -424,22 +782,24 @@ private fun HistoryListItem(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         ListItem(
             headlineContent = {
                 Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
             supportingContent = {
-                Text(item.url.toDisplayHost(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             },
             leadingContent = {
                 BrowserFavicon(url = item.url, fallbackText = item.title)
             },
-            colors = androidx.compose.material3.ListItemDefaults.colors(
-                containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            ),
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
     }
 }
@@ -455,25 +815,17 @@ private data class HomeLayoutSpec(
 private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
     when {
         maxWidth >= 1_200.dp -> HomeLayoutSpec(
-            horizontalPadding = 40.dp,
-            topPadding = 32.dp,
+            horizontalPadding = 28.dp,
+            topPadding = 28.dp,
             bottomPadding = 112.dp,
             itemSpacing = 10.dp,
-            emptyStateTopPadding = 96.dp,
+            emptyStateTopPadding = 80.dp,
         )
 
         maxWidth >= 840.dp -> HomeLayoutSpec(
-            horizontalPadding = 20.dp,
-            topPadding = 28.dp,
-            bottomPadding = 108.dp,
-            itemSpacing = 10.dp,
-            emptyStateTopPadding = 72.dp,
-        )
-
-        maxWidth >= 600.dp -> HomeLayoutSpec(
-            horizontalPadding = 20.dp,
+            horizontalPadding = 18.dp,
             topPadding = 24.dp,
-            bottomPadding = 104.dp,
+            bottomPadding = 108.dp,
             itemSpacing = 10.dp,
             emptyStateTopPadding = 64.dp,
         )
@@ -489,35 +841,44 @@ private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
 
 @Composable
 private fun HomeHeader(
+    title: String,
+    subtitle: String,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            text = stringResource(R.string.home_title),
+            text = title,
             style = if (compact) {
-                MaterialTheme.typography.headlineSmall
+                MaterialTheme.typography.headlineMedium
             } else {
                 MaterialTheme.typography.displaySmall
             },
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = stringResource(R.string.home_subtitle),
-            style = MaterialTheme.typography.bodyLarge,
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 @Composable
-private fun EmptySources(
+private fun EmptyState(
+    icon: ImageVector,
+    title: String,
+    body: String,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -530,23 +891,23 @@ private fun EmptySources(
         ) {
             Surface(
                 modifier = Modifier.padding(bottom = 6.dp),
-                shape = MaterialTheme.shapes.small,
+                shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Add,
+                    imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.padding(18.dp),
+                    modifier = Modifier.padding(20.dp),
                 )
             }
             Text(
-                text = stringResource(R.string.empty_sources),
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(R.string.empty_sources_subtitle),
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -554,6 +915,19 @@ private fun EmptySources(
         }
     }
 }
+
+private fun String.toDisplayHost(): String =
+    removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore("/")
+        .removePrefix("www.")
+
+private fun String.looksLikeUrl(): Boolean =
+    trim().let { text ->
+        text.startsWith("http://") ||
+            text.startsWith("https://") ||
+            ('.' in text && ' ' !in text)
+    }
 
 @Preview(name = "Phone", device = Devices.PHONE, showBackground = true)
 @Preview(name = "Foldable", device = Devices.FOLDABLE, showBackground = true)
@@ -581,6 +955,15 @@ private fun HomeScreenPreview() {
                         isDefault = false,
                     ),
                 ),
+                readingItems = listOf(
+                    ReadingItem(
+                        id = 1,
+                        title = "A saved article with a longer headline",
+                        url = "https://example.com/article",
+                        sourceName = "Example",
+                        addedAt = 1,
+                    ),
+                ),
             ),
             onSourceClick = {},
             onReadingItemClick = {},
@@ -592,9 +975,3 @@ private fun HomeScreenPreview() {
         )
     }
 }
-
-private fun String.toDisplayHost(): String =
-    removePrefix("https://")
-        .removePrefix("http://")
-        .substringBefore("/")
-        .removePrefix("www.")

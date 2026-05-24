@@ -64,7 +64,7 @@ fun AppNavigation() {
     )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val isMultiPaneWidth = maxWidth >= 840.dp
+        val isMultiPaneWidth = maxWidth >= 600.dp
 
         NavDisplay(
             backStack = backStack,

@@ -78,7 +78,7 @@ fun SourceCard(
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp)
+                .height(56.dp)
                 .scale(cardScale)
                 .combinedClickable(
                     interactionSource = interactionSource,
@@ -101,8 +101,8 @@ fun SourceCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(start = 10.dp, top = 6.dp, end = 2.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BrowserFavicon(url = source.url, fallbackText = source.name)
@@ -118,7 +118,7 @@ fun SourceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${source.folderName} · $host",
+                        text = host,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -189,7 +189,7 @@ fun BrowserFavicon(
     }
 
     Surface(
-        modifier = modifier.size(40.dp),
+        modifier = modifier.size(36.dp),
         shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         tonalElevation = 2.dp,
@@ -197,7 +197,7 @@ fun BrowserFavicon(
         Box(
             modifier = Modifier
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .padding(7.dp),
+                .padding(6.dp),
             contentAlignment = Alignment.Center,
         ) {
             val bitmap = imageBitmap
@@ -205,7 +205,7 @@ fun BrowserFavicon(
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             } else {
                 SourceMark(fallbackText)

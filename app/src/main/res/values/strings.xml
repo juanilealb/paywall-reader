@@ -24,6 +24,15 @@
     <string name="all_sources">Todas</string>
     <string name="read_later">Read later</string>
     <string name="history">Historial</string>
+    <string name="new_folder">Nueva carpeta</string>
+    <string name="empty_search_title">Sin resultados</string>
+    <string name="empty_search_subtitle">Probá con otro nombre, dominio o carpeta.</string>
+    <string name="empty_read_later">Sin lecturas guardadas</string>
+    <string name="empty_read_later_subtitle">Cuando estés leyendo, tocá el marcador para sumar artículos acá.</string>
+    <string name="empty_history">Sin historial</string>
+    <string name="empty_history_subtitle">Las páginas que abras desde la app aparecen acá.</string>
+    <string name="more_articles">Más artículos</string>
+    <string name="history_recent">Reciente</string>
     <string name="mark_read">Marcar como leído</string>
     <string name="reader_loading">Cargando página…</string>
     <string name="reader_error_title">No se pudo cargar</string>

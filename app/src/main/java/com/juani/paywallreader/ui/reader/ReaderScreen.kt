@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
@@ -65,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
@@ -170,13 +173,14 @@ fun ReaderScreen(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
-        val toolbarAlignment = if (maxWidth >= 600.dp) {
+        val useVerticalToolbar = !showBackButton || maxWidth >= 420.dp
+        val toolbarAlignment = if (maxWidth >= 600.dp || useVerticalToolbar) {
             Alignment.CenterEnd
         } else {
             Alignment.BottomCenter
         }
-        val useVerticalToolbar = maxWidth >= 840.dp
         val showShareAction = maxWidth >= 380.dp
+        val isArchivePage = currentUrl.isArchiveServiceUrl()
 
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -333,7 +337,7 @@ fun ReaderScreen(
                 canNavigateForward = canNavigateForward,
                 isLoading = isLoading,
                 vertical = useVerticalToolbar,
-                showShareAction = showShareAction,
+                showShareAction = showShareAction && !useVerticalToolbar,
                 onBack = onBack,
                 onNavigateBack = {
                     webView?.goBack()
@@ -357,15 +361,20 @@ fun ReaderScreen(
                 onOpenArchive = openArchiveSearch,
                 onMarkRead = markCurrentRead,
                 onShare = shareOriginal,
+                archiveMode = isArchivePage,
                 modifier = Modifier
                     .align(toolbarAlignment)
-                    .padding(WindowInsets.safeDrawing.asPaddingValues())
-                    .padding(16.dp)
                     .then(
                         if (useVerticalToolbar) {
                             Modifier
+                                .offset(x = -FloatingToolbarDefaults.ScreenOffset)
+                                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                                .zIndex(1f)
                         } else {
-                            Modifier.widthIn(max = 520.dp)
+                            Modifier
+                                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                                .padding(16.dp)
+                                .widthIn(max = 520.dp)
                         },
                     ),
             )
@@ -392,6 +401,7 @@ private fun ReaderFloatingToolbar(
     onOpenArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
+    archiveMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (vertical) {
@@ -405,14 +415,15 @@ private fun ReaderFloatingToolbar(
             },
             modifier = modifier,
             colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
             floatingActionButtonPosition = FloatingToolbarVerticalFabPosition.Bottom,
         ) {
             ReaderToolbarActions(
                 showBackButton = showBackButton,
                 canNavigateBack = canNavigateBack,
                 canNavigateForward = canNavigateForward,
-                showShareAction = showShareAction,
+                showShareAction = false,
+                showOpenOriginal = false,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -422,6 +433,7 @@ private fun ReaderFloatingToolbar(
                 onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
+                archiveMode = archiveMode,
             )
         }
     } else {
@@ -443,6 +455,7 @@ private fun ReaderFloatingToolbar(
                 canNavigateBack = canNavigateBack,
                 canNavigateForward = canNavigateForward,
                 showShareAction = showShareAction,
+                showOpenOriginal = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -452,6 +465,7 @@ private fun ReaderFloatingToolbar(
                 onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
+                archiveMode = archiveMode,
             )
         }
     }
@@ -479,6 +493,7 @@ private fun ReaderToolbarActions(
     canNavigateBack: Boolean,
     canNavigateForward: Boolean,
     showShareAction: Boolean,
+    showOpenOriginal: Boolean,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
@@ -488,68 +503,84 @@ private fun ReaderToolbarActions(
     onOpenArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
+    archiveMode: Boolean,
 ) {
     if (showBackButton) {
-        IconButton(onClick = onBack) {
+        IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.reader_back),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
     IconButton(
         onClick = onNavigateBack,
         enabled = canNavigateBack,
+        modifier = Modifier.size(40.dp),
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
             contentDescription = stringResource(R.string.reader_web_back),
+            modifier = Modifier.size(20.dp),
         )
     }
     IconButton(
         onClick = onNavigateForward,
         enabled = canNavigateForward,
+        modifier = Modifier.size(40.dp),
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
             contentDescription = stringResource(R.string.reader_web_forward),
+            modifier = Modifier.size(20.dp),
         )
     }
-    IconButton(onClick = onOpenOriginal) {
-        Icon(
-            imageVector = Icons.Rounded.OpenInBrowser,
-            contentDescription = stringResource(R.string.reader_open_original),
-        )
+    if (showOpenOriginal) {
+        IconButton(onClick = onOpenOriginal, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.OpenInBrowser,
+                contentDescription = stringResource(R.string.reader_open_original),
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
-    IconButton(onClick = onSaveForLater) {
-        Icon(
-            imageVector = Icons.Rounded.Bookmark,
-            contentDescription = stringResource(R.string.reader_save_later),
-        )
-    }
-    IconButton(onClick = onOpenReader) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.Article,
-            contentDescription = stringResource(R.string.reader_open_reader),
-        )
-    }
-    IconButton(onClick = onOpenArchive) {
-        Icon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = stringResource(R.string.reader_open_archive),
-        )
-    }
-    IconButton(onClick = onMarkRead) {
-        Icon(
-            imageVector = Icons.Rounded.Check,
-            contentDescription = stringResource(R.string.reader_mark_read),
-        )
+    if (!archiveMode) {
+        IconButton(onClick = onSaveForLater, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Bookmark,
+                contentDescription = stringResource(R.string.reader_save_later),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        IconButton(onClick = onOpenReader, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.Article,
+                contentDescription = stringResource(R.string.reader_open_reader),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        IconButton(onClick = onOpenArchive, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = stringResource(R.string.reader_open_archive),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = stringResource(R.string.reader_mark_read),
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
     if (showShareAction) {
-        IconButton(onClick = onShare) {
+        IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Rounded.Share,
                 contentDescription = stringResource(R.string.reader_share),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -601,6 +632,11 @@ private fun String.isReaderServiceUrl(): Boolean =
     runCatching { Uri.parse(this).isReaderServiceUrl() }.getOrDefault(false)
 
 private fun Uri.isReaderServiceUrl(): Boolean = host in ALLOWED_READER_HOSTS
+
+private fun String.isArchiveServiceUrl(): Boolean =
+    runCatching {
+        Uri.parse(this).host in setOf("archive.today", ARCHIVE_FO_HOST, "archive.is", "archive.ph")
+    }.getOrDefault(false)
 
 private fun String.toOriginalArticleUrl(): String =
     runCatching {
