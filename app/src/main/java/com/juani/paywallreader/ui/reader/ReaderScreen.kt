@@ -433,6 +433,7 @@ private fun ReaderFloatingToolbar(
                 showShareAction = false,
                 showOpenOriginal = false,
                 showCollapseAction = true,
+                showClosePageAction = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -466,6 +467,7 @@ private fun ReaderFloatingToolbar(
                 showShareAction = showShareAction,
                 showOpenOriginal = true,
                 showCollapseAction = false,
+                showClosePageAction = false,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -514,6 +516,7 @@ private fun ReaderToolbarActions(
     showShareAction: Boolean,
     showOpenOriginal: Boolean,
     showCollapseAction: Boolean,
+    showClosePageAction: Boolean,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
@@ -580,12 +583,22 @@ private fun ReaderToolbarActions(
                 modifier = Modifier.size(20.dp),
             )
         }
-        IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
-            Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = stringResource(R.string.reader_mark_read),
-                modifier = Modifier.size(20.dp),
-            )
+        if (showClosePageAction) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.reader_close_page),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        } else {
+            IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = stringResource(R.string.reader_mark_read),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
     if (showShareAction) {
@@ -734,6 +747,23 @@ private fun WebView.applySiteChromeCleanup() {
                 min-height: 0 !important;
                 pointer-events: none !important;
               }
+              html,
+              body {
+                overflow-y: auto !important;
+                overscroll-behavior: auto !important;
+                touch-action: auto !important;
+              }
+              html.paywall-reader-economist-unlocked,
+              html.paywall-reader-economist-unlocked body,
+              html.paywall-reader-economist-unlocked #__next,
+              html.paywall-reader-economist-unlocked main {
+                height: auto !important;
+                min-height: 100% !important;
+                max-height: none !important;
+                overflow-y: auto !important;
+                position: static !important;
+                touch-action: auto !important;
+              }
             `;
             document.head.appendChild(style);
           }
@@ -776,9 +806,28 @@ private fun WebView.applySiteChromeCleanup() {
             }
           });
 
+          document.documentElement.classList.remove('modal-open', 'no-scroll', 'noscroll', 'scroll-lock');
           document.documentElement.style.overflow = '';
+          document.documentElement.style.overflowY = 'auto';
+          document.documentElement.style.touchAction = 'auto';
           if (document.body) {
+            document.body.classList.remove('modal-open', 'no-scroll', 'noscroll', 'scroll-lock');
             document.body.style.overflow = '';
+            document.body.style.overflowY = 'auto';
+            document.body.style.touchAction = 'auto';
+          }
+
+          if (location.hostname.indexOf('economist.com') !== -1) {
+            document.documentElement.classList.add('paywall-reader-economist-unlocked');
+            [document.body, document.getElementById('__next'), document.querySelector('main')]
+              .filter(Boolean)
+              .forEach(function(element) {
+                element.style.height = 'auto';
+                element.style.maxHeight = 'none';
+                element.style.overflowY = 'auto';
+                element.style.position = 'static';
+                element.style.touchAction = 'auto';
+              });
           }
         })();
         """.trimIndent(),

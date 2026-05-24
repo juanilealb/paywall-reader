@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import android.graphics.BitmapFactory
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -59,7 +60,9 @@ fun SourceCard(
     source: Source,
     onClick: (Source) -> Unit,
     onDelete: (Source) -> Unit,
+    onEdit: (Source) -> Unit,
     deleteLabel: String,
+    editLabel: String,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
@@ -160,6 +163,19 @@ fun SourceCard(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
         ) {
+            DropdownMenuItem(
+                text = { Text(editLabel) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onEdit(source)
+                },
+            )
             DropdownMenuItem(
                 text = { Text(deleteLabel) },
                 onClick = {
@@ -270,7 +286,9 @@ private fun SourceCardPreview() {
             ),
             onClick = {},
             onDelete = {},
+            onEdit = {},
             deleteLabel = "Delete",
+            editLabel = "Edit",
             modifier = Modifier.padding(16.dp),
         )
     }

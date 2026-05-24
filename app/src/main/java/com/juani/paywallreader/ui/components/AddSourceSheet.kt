@@ -59,10 +59,15 @@ fun AddSourceSheet(
     onSaveAndOpen: (name: String, url: String, folderName: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    initialName: String = "",
     existingUrls: Set<String> = emptySet(),
     initialUrl: String = "",
     initialFolderName: String = "News",
     existingFolders: List<String> = emptyList(),
+    title: String? = null,
+    subtitle: String? = null,
+    primaryActionLabel: String? = null,
+    allowSaveOptions: Boolean = true,
 ) {
     val sheetState = rememberBottomSheetState(
         SheetValue.Hidden,
@@ -70,9 +75,9 @@ fun AddSourceSheet(
     )
     val scope = rememberCoroutineScope()
     var isContentVisible by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf(initialUrl) }
-    var folderName by remember { mutableStateOf(initialFolderName) }
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    var url by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var folderName by remember(initialFolderName) { mutableStateOf(initialFolderName) }
     var saveMenuExpanded by remember { mutableStateOf(false) }
     var folderMenuExpanded by remember { mutableStateOf(false) }
     val validatedUrl = validateSourceUrl(url)
@@ -80,6 +85,9 @@ fun AddSourceSheet(
     val isDuplicate = normalizedUrl in existingUrls
     val showUrlError = url.isNotBlank() && !validatedUrl.isValid
     val canSave = name.isNotBlank() && url.isNotBlank() && validatedUrl.isValid && !isDuplicate
+    val sheetTitle = title ?: stringResource(R.string.add_source)
+    val sheetSubtitle = subtitle ?: stringResource(R.string.add_source_subtitle)
+    val saveLabel = primaryActionLabel ?: stringResource(R.string.save)
 
     LaunchedEffect(Unit) {
         isContentVisible = true
@@ -104,12 +112,12 @@ fun AddSourceSheet(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.add_source),
+                    text = sheetTitle,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = stringResource(R.string.add_source_subtitle),
+                    text = sheetSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -234,60 +242,76 @@ fun AddSourceSheet(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                SplitButtonLayout(
-                    leadingButton = {
-                        Button(
-                            enabled = canSave,
-                            onClick = {
-                                onSave(name, normalizedUrl, folderName.ifBlank { "News" })
-                                scope.launch {
-                                    sheetState.hide()
-                                    onDismiss()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.save))
-                        }
-                    },
-                    trailingButton = {
-                        FilledIconButton(
-                            enabled = canSave,
-                            onClick = { saveMenuExpanded = true },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = stringResource(R.string.save_more_options),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = saveMenuExpanded,
-                            onDismissRequest = { saveMenuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.save_and_open)) },
+                if (allowSaveOptions) {
+                    SplitButtonLayout(
+                        leadingButton = {
+                            Button(
+                                enabled = canSave,
                                 onClick = {
-                                    saveMenuExpanded = false
-                                    onSaveAndOpen(name, normalizedUrl, folderName.ifBlank { "News" })
+                                    onSave(name, normalizedUrl, folderName.ifBlank { "News" })
                                     scope.launch {
                                         sheetState.hide()
                                         onDismiss()
                                     }
                                 },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.save_and_add_another)) },
-                                onClick = {
-                                    saveMenuExpanded = false
-                                    onSave(name, normalizedUrl, folderName.ifBlank { "News" })
-                                    name = ""
-                                    url = ""
-                                },
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(saveLabel)
+                            }
+                        },
+                        trailingButton = {
+                            FilledIconButton(
+                                enabled = canSave,
+                                onClick = { saveMenuExpanded = true },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = stringResource(R.string.save_more_options),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = saveMenuExpanded,
+                                onDismissRequest = { saveMenuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.save_and_open)) },
+                                    onClick = {
+                                        saveMenuExpanded = false
+                                        onSaveAndOpen(name, normalizedUrl, folderName.ifBlank { "News" })
+                                        scope.launch {
+                                            sheetState.hide()
+                                            onDismiss()
+                                        }
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.save_and_add_another)) },
+                                    onClick = {
+                                        saveMenuExpanded = false
+                                        onSave(name, normalizedUrl, folderName.ifBlank { "News" })
+                                        name = ""
+                                        url = ""
+                                    },
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Button(
+                        enabled = canSave,
+                        onClick = {
+                            onSave(name, normalizedUrl, folderName.ifBlank { "News" })
+                            scope.launch {
+                                sheetState.hide()
+                                onDismiss()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(saveLabel)
+                    }
+                }
                 TextButton(
                     onClick = {
                         scope.launch {

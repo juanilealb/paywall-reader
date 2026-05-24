@@ -1,6 +1,7 @@
 package com.juani.paywallreader.data.repository
 
 import com.juani.paywallreader.data.local.SourceDao
+import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
@@ -46,6 +47,40 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `createFolder persists empty folders`() = runTest {
+        repository.createFolder("  Tech  ")
+
+        assertEquals(listOf("Tech"), sourceDao.folders.value.map { it.name })
+    }
+
+    @Test
+    fun `updateSource edits source and preserves createdAt`() = runTest {
+        val source = Source(
+            id = 1,
+            name = "Old",
+            url = "https://old.com",
+            isDefault = false,
+            folderName = "News",
+        )
+        sourceDao.seed(source.toEntity(createdAt = 99))
+
+        repository.updateSource(source, " New name ", "new.com", " Tech ")
+
+        assertEquals(
+            SourceEntity(
+                id = 1,
+                name = "New name",
+                url = "https://new.com",
+                isDefault = false,
+                folderName = "Tech",
+                createdAt = 99,
+            ),
+            sourceDao.entities.value.single(),
+        )
+        assertEquals("Tech", sourceDao.folders.value.single().name)
+    }
+
+    @Test
     fun `deleteSource removes former default sources`() = runTest {
         val source = Source(
             id = 1,
@@ -88,6 +123,7 @@ class SourceRepositoryTest {
 
 private class FakeSourceDao : SourceDao {
     val entities = MutableStateFlow<List<SourceEntity>>(emptyList())
+    val folders = MutableStateFlow<List<FolderEntity>>(emptyList())
     val readingItems = MutableStateFlow<List<ReadingItemEntity>>(emptyList())
     val historyItems = MutableStateFlow<List<HistoryEntity>>(emptyList())
     private var nextId = 1L
@@ -95,6 +131,8 @@ private class FakeSourceDao : SourceDao {
     private var nextHistoryId = 1L
 
     override fun getAll(): Flow<List<SourceEntity>> = entities
+
+    override fun getFolders(): Flow<List<FolderEntity>> = folders
 
     override fun getReadingItems(): Flow<List<ReadingItemEntity>> = readingItems
 
@@ -113,6 +151,28 @@ private class FakeSourceDao : SourceDao {
         nextId = maxOf(nextId, entity.id + 1)
         entities.value = entities.value + entity
         return entity.id
+    }
+
+    override suspend fun insertFolder(folder: FolderEntity): Long {
+        if (folders.value.any { it.name == folder.name }) {
+            return -1
+        }
+        folders.value = folders.value + folder.copy(createdAt = folders.value.size + 1L)
+        return folders.value.size.toLong()
+    }
+
+    override suspend fun updateSource(id: Long, name: String, url: String, folderName: String) {
+        entities.value = entities.value.map { entity ->
+            if (entity.id == id) {
+                entity.copy(
+                    name = name,
+                    url = url,
+                    folderName = folderName,
+                )
+            } else {
+                entity
+            }
+        }
     }
 
     override suspend fun delete(source: SourceEntity) {

@@ -21,11 +21,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.sources,
+        repository.folders,
         repository.readingItems,
         repository.historyItems,
-    ) { sources, readingItems, historyItems ->
+    ) { sources, folders, readingItems, historyItems ->
         HomeUiState(
             sources = sources,
+            folders = folders,
             readingItems = readingItems,
             historyItems = historyItems,
         )
@@ -44,6 +46,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteSource(source: Source) {
         viewModelScope.launch {
             repository.deleteSource(source)
+        }
+    }
+
+    fun createFolder(folderName: String) {
+        viewModelScope.launch {
+            repository.createFolder(folderName)
+        }
+    }
+
+    fun updateSource(source: Source, name: String, url: String, folderName: String) {
+        viewModelScope.launch {
+            repository.updateSource(source, name, url, folderName)
         }
     }
 
@@ -74,6 +88,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
 data class HomeUiState(
     val sources: List<Source> = emptyList(),
+    val folders: List<String> = emptyList(),
     val readingItems: List<ReadingItem> = emptyList(),
     val historyItems: List<HistoryItem> = emptyList(),
 )

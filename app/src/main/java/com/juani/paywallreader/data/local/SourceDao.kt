@@ -12,6 +12,9 @@ interface SourceDao {
     @Query("SELECT * FROM sources ORDER BY folderName COLLATE NOCASE ASC, name COLLATE NOCASE ASC")
     fun getAll(): Flow<List<SourceEntity>>
 
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE ASC")
+    fun getFolders(): Flow<List<FolderEntity>>
+
     @Query("SELECT * FROM reading_items ORDER BY addedAt DESC")
     fun getReadingItems(): Flow<List<ReadingItemEntity>>
 
@@ -20,6 +23,12 @@ interface SourceDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(source: SourceEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFolder(folder: FolderEntity): Long
+
+    @Query("UPDATE sources SET name = :name, url = :url, folderName = :folderName WHERE id = :id")
+    suspend fun updateSource(id: Long, name: String, url: String, folderName: String)
 
     @Delete
     suspend fun delete(source: SourceEntity)

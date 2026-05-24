@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class],
-    version = 3,
+    entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(DefaultSourcesCallback())
                 .build()
 
@@ -70,12 +70,42 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_history_items_url ON history_items(url)")
             }
         }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS folders (
+                        name TEXT PRIMARY KEY NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO folders(name, createdAt)
+                    SELECT DISTINCT folderName, MIN(createdAt)
+                    FROM sources
+                    GROUP BY folderName
+                    """.trimIndent(),
+                )
+                db.execSQL("INSERT OR IGNORE INTO folders(name, createdAt) VALUES ('News', 1)")
+            }
+        }
     }
 }
 
 private class DefaultSourcesCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
+        db.insert(
+            "folders",
+            0,
+            ContentValues().apply {
+                put("name", "News")
+                put("createdAt", 1)
+            },
+        )
         DEFAULT_SOURCES.forEach { source ->
             db.insert("sources", 0, source.toContentValues())
         }

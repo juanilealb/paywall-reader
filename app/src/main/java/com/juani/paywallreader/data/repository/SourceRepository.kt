@@ -1,6 +1,7 @@
 package com.juani.paywallreader.data.repository
 
 import com.juani.paywallreader.data.local.SourceDao
+import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
@@ -18,6 +19,10 @@ class SourceRepository(
         entities.map { it.toDomain() }
     }
 
+    val folders: Flow<List<String>> = sourceDao.getFolders().map { entities ->
+        entities.map { it.name.normalizedFolderName() }.distinct().sortedBy { it.lowercase() }
+    }
+
     val readingItems: Flow<List<ReadingItem>> = sourceDao.getReadingItems().map { entities ->
         entities.map { it.toDomain() }
     }
@@ -32,13 +37,35 @@ class SourceRepository(
             return
         }
 
+        val normalizedFolderName = folderName.normalizedFolderName()
+        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
         sourceDao.insert(
             SourceEntity(
                 name = name.trim(),
                 url = validatedUrl.normalizedUrl,
                 isDefault = false,
-                folderName = folderName.normalizedFolderName(),
+                folderName = normalizedFolderName,
             ),
+        )
+    }
+
+    suspend fun createFolder(folderName: String) {
+        sourceDao.insertFolder(FolderEntity(name = folderName.normalizedFolderName()))
+    }
+
+    suspend fun updateSource(source: Source, name: String, url: String, folderName: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (name.isBlank() || !validatedUrl.isValid) return
+        val normalizedUrl = validatedUrl.normalizedUrl
+        if (normalizedUrl != source.url && sourceDao.countByUrl(normalizedUrl) > 0) return
+
+        val normalizedFolderName = folderName.normalizedFolderName()
+        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        sourceDao.updateSource(
+            id = source.id,
+            name = name.trim(),
+            url = normalizedUrl,
+            folderName = normalizedFolderName,
         )
     }
 

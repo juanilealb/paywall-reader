@@ -19,6 +19,10 @@
     <string name="save_and_add_another">Guardar y agregar otra</string>
     <string name="save_more_options">Más opciones de guardado</string>
     <string name="cancel">Cancelar</string>
+    <string name="edit">Editar</string>
+    <string name="edit_source">Editar fuente</string>
+    <string name="edit_source_subtitle">Cambiá el nombre, URL o carpeta de esta fuente.</string>
+    <string name="save_changes">Guardar cambios</string>
     <string name="delete">Eliminar</string>
     <string name="delete_source_title">Eliminar fuente</string>
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
@@ -52,6 +56,7 @@
     <string name="reader_open_reader">Buscar en archive.ph</string>
     <string name="reader_save_later">Guardar en Read later</string>
     <string name="reader_mark_read">Leído</string>
+    <string name="reader_close_page">Cerrar página</string>
     <string name="reader_share">Compartir</string>
     <string name="reader_expand_toolbar">Mostrar acciones</string>
     <string name="reader_collapse_toolbar">Ocultar acciones</string>

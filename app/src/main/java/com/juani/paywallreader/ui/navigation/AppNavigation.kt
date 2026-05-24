@@ -15,6 +15,14 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -67,6 +75,7 @@ fun AppNavigation() {
         paneExpansionState = listDetailPaneExpansionState,
     )
     var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var addSourceRequest by rememberSaveable { mutableStateOf(0) }
     val closeReader = {
         backStack.removeLastOrNull()
         openReaderUrl = backStack.filterIsInstance<AppRoute.Reader>().lastOrNull()?.url
@@ -87,13 +96,17 @@ fun AppNavigation() {
                 entry<AppRoute.Home>(
                     metadata = ListDetailSceneStrategy.listPane(
                         detailPlaceholder = {
-                            ReaderPlaceholder()
+                            ReaderPlaceholder(
+                                showAddSourceFab = isMultiPaneWidth && openReaderUrl == null,
+                                onAddSource = { addSourceRequest++ },
+                            )
                         },
                     ),
                 ) {
                     HomeRoute(
+                        addSourceRequest = addSourceRequest,
                         selectedSourceUrl = openReaderUrl,
-                        showAddSourceFab = !isMultiPaneWidth || openReaderUrl == null,
+                        showAddSourceFab = !isMultiPaneWidth,
                         onSourceClick = { source ->
                             openReaderUrl = source.url
                             backStack.add(AppRoute.Reader(source.url, source.name))
@@ -160,8 +173,11 @@ private fun backwardExitTransition(): ExitTransition =
         targetOffsetX = { it / 4 },
     ) + fadeOut(animationSpec = PaywallReaderMotion.standardTween)
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReaderPlaceholder(
+    showAddSourceFab: Boolean,
+    onAddSource: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -169,10 +185,10 @@ private fun ReaderPlaceholder(
         color = MaterialTheme.colorScheme.background,
     ) {
         Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center,
+            modifier = modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -200,6 +216,27 @@ private fun ReaderPlaceholder(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
+            }
+            if (showAddSourceFab) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(
+                            x = -FloatingToolbarDefaults.ScreenOffset,
+                            y = -FloatingToolbarDefaults.ScreenOffset,
+                        )
+                        .padding(WindowInsets.safeDrawing.asPaddingValues())
+                        .size(64.dp),
+                ) {
+                    FloatingToolbarDefaults.VibrantFloatingActionButton(
+                        onClick = onAddSource,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.add_source),
+                        )
+                    }
+                }
             }
         }
     }

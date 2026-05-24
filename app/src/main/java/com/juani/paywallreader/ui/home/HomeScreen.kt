@@ -51,12 +51,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,6 +99,7 @@ import kotlinx.coroutines.launch
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
     modifier: Modifier = Modifier,
+    addSourceRequest: Int = 0,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     viewModel: HomeViewModel = homeViewModel(),
@@ -134,7 +137,10 @@ fun HomeRoute(
         onDeleteSource = viewModel::deleteSource,
         onMarkRead = viewModel::markRead,
         onClearHistory = viewModel::clearHistory,
+        onCreateFolder = viewModel::createFolder,
+        onUpdateSource = viewModel::updateSource,
         existingUrls = uiState.sources.map { it.url }.toSet(),
+        addSourceRequest = addSourceRequest,
         selectedSourceUrl = selectedSourceUrl,
         showAddSourceFab = showAddSourceFab,
         modifier = modifier,
@@ -160,15 +166,22 @@ fun HomeScreen(
     onDeleteSource: (Source) -> Unit,
     onMarkRead: (String) -> Unit,
     onClearHistory: () -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onUpdateSource: (Source, String, String, String) -> Unit,
     existingUrls: Set<String>,
+    addSourceRequest: Int = 0,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
+    var showEditSourceSheet by rememberSaveable { mutableStateOf(false) }
+    var showNewFolderDialog by rememberSaveable { mutableStateOf(false) }
     var showClearHistoryConfirmation by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
     var addSourceInitialFolder by rememberSaveable { mutableStateOf("News") }
+    var sourceToEdit by remember { mutableStateOf<Source?>(null) }
+    var newFolderName by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
     var readLaterFilter by rememberSaveable { mutableStateOf(ReadLaterFilter.All) }
@@ -177,8 +190,10 @@ fun HomeScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
-    val folders = remember(uiState.sources) {
-        uiState.sources.map { it.folderName }.distinct().sorted()
+    val folders = remember(uiState.folders, uiState.sources) {
+        (uiState.folders + uiState.sources.map { it.folderName })
+            .distinct()
+            .sortedBy { it.lowercase() }
     }
     val normalizedSearch = searchQuery.trim()
     val visibleSources = remember(uiState.sources, selectedFolder, normalizedSearch) {
@@ -214,6 +229,14 @@ fun HomeScreen(
     }
     val visibleHistoryGroups = remember(visibleHistoryItems) {
         visibleHistoryItems.take(30).groupByVisitBucket()
+    }
+
+    LaunchedEffect(addSourceRequest) {
+        if (addSourceRequest > 0) {
+            addSourceInitialUrl = ""
+            addSourceInitialFolder = selectedFolder ?: "News"
+            showAddSourceSheet = true
+        }
     }
 
     Scaffold(
@@ -282,9 +305,8 @@ fun HomeScreen(
                                     selectedFolder = selectedFolder,
                                     onFolderSelected = { selectedFolder = it },
                                     onNewFolder = {
-                                        addSourceInitialUrl = ""
-                                        addSourceInitialFolder = ""
-                                        showAddSourceSheet = true
+                                        newFolderName = ""
+                                        showNewFolderDialog = true
                                     },
                                 )
                             }
@@ -327,7 +349,12 @@ fun HomeScreen(
                                         onSourceClick(it)
                                     },
                                     onDelete = onDeleteSource,
+                                    onEdit = {
+                                        sourceToEdit = it
+                                        showEditSourceSheet = true
+                                    },
                                     deleteLabel = stringResource(R.string.delete),
+                                    editLabel = stringResource(R.string.edit),
                                     selected = source.url == selectedSourceUrl,
                                 )
                             }
@@ -511,6 +538,68 @@ fun HomeScreen(
             initialUrl = addSourceInitialUrl,
             initialFolderName = addSourceInitialFolder,
             existingFolders = folders,
+        )
+    }
+
+    if (showEditSourceSheet) {
+        val source = sourceToEdit
+        if (source != null) {
+            AddSourceSheet(
+                onSave = { name, url, folderName ->
+                    onUpdateSource(source, name, url, folderName)
+                },
+                onSaveAndOpen = { name, url, folderName ->
+                    onUpdateSource(source, name, url, folderName)
+                    onSourceClick(source.copy(name = name, url = url, folderName = folderName))
+                },
+                onDismiss = {
+                    showEditSourceSheet = false
+                    sourceToEdit = null
+                },
+                existingUrls = existingUrls - source.url,
+                initialName = source.name,
+                initialUrl = source.url,
+                initialFolderName = source.folderName,
+                existingFolders = folders,
+                title = stringResource(R.string.edit_source),
+                subtitle = stringResource(R.string.edit_source_subtitle),
+                primaryActionLabel = stringResource(R.string.save_changes),
+                allowSaveOptions = false,
+            )
+        }
+    }
+
+    if (showNewFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewFolderDialog = false },
+            title = { Text(stringResource(R.string.new_folder)) },
+            text = {
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    label = { Text(stringResource(R.string.folder_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newFolderName.isNotBlank(),
+                    onClick = {
+                        val folder = newFolderName.trim()
+                        onCreateFolder(folder)
+                        selectedFolder = folder
+                        showNewFolderDialog = false
+                    },
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewFolderDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
 
@@ -1245,6 +1334,8 @@ private fun HomeScreenPreview() {
             onDeleteSource = {},
             onMarkRead = {},
             onClearHistory = {},
+            onCreateFolder = {},
+            onUpdateSource = { _, _, _, _ -> },
             existingUrls = emptySet(),
         )
     }
