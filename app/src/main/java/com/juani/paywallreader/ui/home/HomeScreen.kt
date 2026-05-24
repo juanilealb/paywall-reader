@@ -44,7 +44,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,6 +99,8 @@ import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
 import kotlinx.coroutines.launch
+
+private val HomeBottomActionSize = 64.dp
 
 @Composable
 fun HomeRoute(
@@ -486,37 +488,7 @@ fun HomeScreen(
                 }
             }
 
-            if (selectedSection == HomeSection.Sources && showAddSourceFab) {
-                FloatingActionButton(
-                    onClick = {
-                        focusManager.clearFocus()
-                        coroutineScope.launch {
-                            val clipboardText = clipboard
-                                .getClipEntry()
-                                ?.clipData
-                                ?.takeIf { it.itemCount > 0 }
-                                ?.getItemAt(0)
-                                ?.coerceToText(context)
-                                ?.toString()
-                            addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
-                            addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
-                            showAddSourceSheet = true
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .padding(end = layoutSpec.horizontalPadding, bottom = 82.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.add_source),
-                    )
-                }
-            }
-
-            SectionSelector(
+            BottomHomeControls(
                 selectedSection = selectedSection,
                 onSectionSelected = {
                     focusManager.clearFocus()
@@ -528,10 +500,27 @@ fun HomeScreen(
                 },
                 readingCount = uiState.readingItems.size,
                 historyCount = uiState.historyItems.size,
+                showAddSourceAction = showAddSourceFab,
+                onAddSource = {
+                    focusManager.clearFocus()
+                    coroutineScope.launch {
+                        val clipboardText = clipboard
+                            .getClipEntry()
+                            ?.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                        addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
+                        addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
+                        showAddSourceSheet = true
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .navigationBarsPadding(),
+                    .navigationBarsPadding()
+                    .imePadding(),
             )
         }
     }
@@ -672,6 +661,54 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BottomHomeControls(
+    selectedSection: HomeSection,
+    onSectionSelected: (HomeSection) -> Unit,
+    readingCount: Int,
+    historyCount: Int,
+    showAddSourceAction: Boolean,
+    onAddSource: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .height(76.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SectionSelector(
+            selectedSection = selectedSection,
+            onSectionSelected = onSectionSelected,
+            readingCount = readingCount,
+            historyCount = historyCount,
+            modifier = Modifier.weight(1f),
+        )
+        if (showAddSourceAction) {
+            Box(
+                modifier = Modifier.size(76.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier.size(HomeBottomActionSize),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FloatingToolbarDefaults.VibrantFloatingActionButton(
+                        onClick = onAddSource,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.add_source),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private enum class HomeSection(
     val title: String,
     val shortTitle: String,
@@ -728,8 +765,7 @@ private fun SectionSelector(
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
         Surface(

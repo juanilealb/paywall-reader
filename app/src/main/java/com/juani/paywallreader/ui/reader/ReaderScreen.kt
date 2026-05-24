@@ -459,13 +459,13 @@ private fun ReaderFloatingToolbar(
             floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
         ) {
             ReaderToolbarActions(
-                showBackButton = showBackButton,
+                showBackButton = false,
                 canNavigateBack = canNavigateBack,
                 canNavigateForward = canNavigateForward,
-                showShareAction = showShareAction,
-                showOpenOriginal = true,
+                showShareAction = false,
+                showOpenOriginal = false,
                 showCollapseAction = false,
-                showClosePageAction = false,
+                showClosePageAction = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
