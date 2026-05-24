@@ -285,7 +285,8 @@ fun ReaderScreen(
                                     !url.isReaderServiceUrl() &&
                                     url.isLikelyArticleUrl()
                                 ) {
-                                    view?.loadArchiveSearch(url.toString())
+                                    settings.javaScriptEnabled = true
+                                    view?.loadUrl(url.toArticleReaderUrl())
                                     return true
                                 }
 
@@ -949,8 +950,7 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
                             }
 
                             UNWALL_HOST -> {
-                                settings.javaScriptEnabled = false
-                                loadUrl(originalUrl)
+                                loadOriginalWithoutJavaScriptFallback(originalUrl)
                             }
                         }
                     }
@@ -958,6 +958,31 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
             }
         },
         delayMillis,
+    )
+}
+
+private fun WebView.loadOriginalWithoutJavaScriptFallback(originalUrl: String) {
+    settings.javaScriptEnabled = false
+    loadUrl(originalUrl)
+    postDelayed(
+        {
+            evaluateJavascript(
+                """
+                (function() {
+                  var text = document.body ? (document.body.innerText || '').trim() : '';
+                  var media = document.querySelectorAll('article, main, img, video, iframe').length;
+                  return text.length + media;
+                })();
+                """.trimIndent(),
+            ) { result ->
+                val pageWeight = result?.trim('"')?.toIntOrNull() ?: 0
+                val currentOriginalUrl = url?.toOriginalArticleUrl()
+                if (pageWeight < 300 && currentOriginalUrl == originalUrl) {
+                    loadArchiveSearch(originalUrl)
+                }
+            }
+        },
+        5_000L,
     )
 }
 
