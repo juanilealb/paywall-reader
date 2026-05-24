@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.rounded.Add
@@ -34,6 +35,7 @@ import androidx.compose.material3.adaptive.layout.rememberPaneExpansionState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -50,6 +53,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import androidx.core.view.WindowCompat
 import com.juani.paywallreader.R
 import com.juani.paywallreader.ui.home.HomeRoute
 import com.juani.paywallreader.ui.reader.ReaderRoute
@@ -62,6 +66,8 @@ private val FoldFloatingActionButtonSize = 64.dp
 @Composable
 fun AppNavigation() {
     val backStack = rememberNavBackStack(AppRoute.Home)
+    val view = LocalView.current
+    val darkTheme = isSystemInDarkTheme()
     val windowAdaptiveInfo = currentWindowAdaptiveInfo()
     val listDetailDirective = remember(windowAdaptiveInfo) {
         calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(windowAdaptiveInfo)
@@ -77,6 +83,14 @@ fun AppNavigation() {
     )
     var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var addSourceRequest by rememberSaveable { mutableStateOf(0) }
+    SideEffect {
+        if (!view.isInEditMode) {
+            WindowCompat.getInsetsController(
+                (view.context as android.app.Activity).window,
+                view,
+            ).isAppearanceLightStatusBars = openReaderUrl != null || !darkTheme
+        }
+    }
     val closeReader = {
         backStack.removeLastOrNull()
         openReaderUrl = backStack.filterIsInstance<AppRoute.Reader>().lastOrNull()?.url
