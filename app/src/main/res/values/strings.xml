@@ -8,6 +8,7 @@
     <string name="add_source_subtitle">Guardá el sitio una vez y volvé a leerlo desde la lista.</string>
     <string name="source_name">Nombre</string>
     <string name="source_url">URL</string>
+    <string name="folder_name">Carpeta</string>
     <string name="source_preview">Se guardará como</string>
     <string name="invalid_url">Ingresá una URL válida</string>
     <string name="duplicate_source">Esa fuente ya está guardada</string>
@@ -20,7 +21,10 @@
     <string name="delete_source_title">Eliminar fuente</string>
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
     <string name="source_options">Opciones de fuente</string>
-    <string name="default_source_label">Default</string>
+    <string name="all_sources">Todas</string>
+    <string name="read_later">Read later</string>
+    <string name="history">Historial</string>
+    <string name="mark_read">Marcar como leído</string>
     <string name="reader_loading">Cargando página…</string>
     <string name="reader_error_title">No se pudo cargar</string>
     <string name="reader_error_message">Revisá la conexión o probá abrir la página original.</string>
@@ -31,6 +35,9 @@
     <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
     <string name="reader_open_reader">Abrir sin paywall</string>
+    <string name="reader_save_later">Guardar en Read later</string>
+    <string name="reader_open_archive">Buscar en archive.ph</string>
+    <string name="reader_mark_read">Leído</string>
     <string name="reader_share">Compartir</string>
     <string name="reader_back">Volver</string>
     <string name="empty_sources">No tenés fuentes todavía</string>

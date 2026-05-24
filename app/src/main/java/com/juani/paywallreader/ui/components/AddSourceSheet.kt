@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,8 +52,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AddSourceSheet(
-    onSave: (name: String, url: String) -> Unit,
-    onSaveAndOpen: (name: String, url: String) -> Unit,
+    onSave: (name: String, url: String, folderName: String) -> Unit,
+    onSaveAndOpen: (name: String, url: String, folderName: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     existingUrls: Set<String> = emptySet(),
@@ -63,6 +64,7 @@ fun AddSourceSheet(
     var isContentVisible by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf(initialUrl) }
+    var folderName by remember { mutableStateOf("News") }
     var saveMenuExpanded by remember { mutableStateOf(false) }
     val validatedUrl = validateSourceUrl(url)
     val normalizedUrl = validatedUrl.normalizedUrl
@@ -136,6 +138,20 @@ fun AddSourceSheet(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = folderName,
+                    onValueChange = { folderName = it },
+                    label = { Text(stringResource(R.string.folder_name)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Folder,
+                            contentDescription = null,
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 AnimatedVisibility(visible = validatedUrl.isValid && !isDuplicate) {
                     Surface(
@@ -169,7 +185,7 @@ fun AddSourceSheet(
                         Button(
                             enabled = canSave,
                             onClick = {
-                                onSave(name, normalizedUrl)
+                                onSave(name, normalizedUrl, folderName.ifBlank { "News" })
                                 scope.launch {
                                     sheetState.hide()
                                     onDismiss()
@@ -198,7 +214,7 @@ fun AddSourceSheet(
                                 text = { Text(stringResource(R.string.save_and_open)) },
                                 onClick = {
                                     saveMenuExpanded = false
-                                    onSaveAndOpen(name, normalizedUrl)
+                                    onSaveAndOpen(name, normalizedUrl, folderName.ifBlank { "News" })
                                     scope.launch {
                                         sheetState.hide()
                                         onDismiss()
@@ -209,7 +225,7 @@ fun AddSourceSheet(
                                 text = { Text(stringResource(R.string.save_and_add_another)) },
                                 onClick = {
                                     saveMenuExpanded = false
-                                    onSave(name, normalizedUrl)
+                                    onSave(name, normalizedUrl, folderName.ifBlank { "News" })
                                     name = ""
                                     url = ""
                                 },
@@ -239,8 +255,8 @@ fun AddSourceSheet(
 private fun AddSourceSheetPreview() {
     PaywallReaderTheme {
         AddSourceSheet(
-            onSave = { _, _ -> },
-            onSaveAndOpen = { _, _ -> },
+            onSave = { _, _, _ -> },
+            onSaveAndOpen = { _, _, _ -> },
             onDismiss = {},
         )
     }

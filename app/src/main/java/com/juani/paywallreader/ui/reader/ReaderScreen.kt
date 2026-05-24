@@ -1,6 +1,7 @@
 package com.juani.paywallreader.ui.reader
 
 import android.content.Intent
+import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -27,10 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -50,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalFloatingToolbar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,6 +65,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
 import java.io.ByteArrayInputStream
 
@@ -70,13 +77,25 @@ fun ReaderRoute(
     onBack: () -> Unit,
     showBackButton: Boolean = true,
     modifier: Modifier = Modifier,
+    viewModel: ReaderViewModel = readerViewModel(),
 ) {
     ReaderScreen(
         sourceName = sourceName,
         sourceUrl = sourceUrl,
         onBack = onBack,
         showBackButton = showBackButton,
+        onSaveForLater = viewModel::saveForLater,
+        onMarkRead = viewModel::markRead,
+        onRecordVisit = viewModel::recordVisit,
         modifier = modifier,
+    )
+}
+
+@Composable
+private fun readerViewModel(): ReaderViewModel {
+    val application = LocalContext.current.applicationContext as Application
+    return viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application),
     )
 }
 
@@ -87,6 +106,9 @@ fun ReaderScreen(
     sourceUrl: String,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
+    onSaveForLater: (title: String, url: String, sourceName: String) -> Unit,
+    onMarkRead: (url: String) -> Unit,
+    onRecordVisit: (title: String, url: String, sourceName: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -97,6 +119,7 @@ fun ReaderScreen(
     var canNavigateBack by remember { mutableStateOf(false) }
     var canNavigateForward by remember { mutableStateOf(false) }
     var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim()) }
+    var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim()
     }
@@ -114,8 +137,21 @@ fun ReaderScreen(
         val url = webView?.url ?: currentUrl.ifBlank { sourceUrl }
         val uri = Uri.parse(url)
         if (!uri.isReaderServiceUrl()) {
-            webView?.loadUrl(uri.toArticleReaderUrl())
+            webView?.loadPrimaryReader(uri)
         }
+    }
+    val saveCurrentForLater = {
+        val url = (webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl()
+        onSaveForLater(currentTitle.ifBlank { sourceName }, url, sourceName)
+    }
+    val markCurrentRead = {
+        onMarkRead((webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl())
+    }
+    val openArchiveSearch = {
+        val url = (webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl()
+        webView?.settings?.javaScriptEnabled = true
+        webView?.loadUrl(url.toArchiveSearchUrl())
+        Unit
     }
     fun updateNavigationState(view: WebView?) {
         canNavigateBack = view?.canGoBack() == true
@@ -145,98 +181,124 @@ fun ReaderScreen(
         Box(
             modifier = Modifier.fillMaxSize(),
         ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        configureReaderSettings()
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+            key(initialUrl) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        WebView(context).apply {
+                            configureReaderSettings()
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 progress = newProgress
-                                updateNavigationState(view)
+                                    currentTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentTitle
+                                    updateNavigationState(view)
+                                }
                             }
-                        }
-                        webViewClient = object : WebViewClient() {
+                            webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 isLoading = true
                                 hasError = false
                                 currentUrl = url ?: currentUrl
+                                if (url?.isReaderServiceUrl() == true) {
+                                    view?.loadFallbackReaderIfBlank(url, 8_000L)
+                                }
                                 updateNavigationState(view)
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
                                 currentUrl = url ?: view?.url ?: currentUrl
+                                currentTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentTitle
                                 updateNavigationState(view)
-                                view?.applyAdCleanup()
-                                if (url?.isRemovePaywallsUrl() == true) {
+                                    view?.applyAdCleanup()
+                                    view?.applySiteChromeCleanup()
+                                    view?.postDelayed({ view.applySiteChromeCleanup() }, 700L)
+                                    view?.postDelayed({ view.applySiteChromeCleanup() }, 1_800L)
+                                    if (url?.isReaderServiceUrl() == true) {
                                     view?.applyReaderChrome()
+                                    view?.postDelayed({ view.applyReaderChrome() }, 700L)
+                                        view?.loadFallbackReaderIfBlank(url, 2_500L)
+                                }
+                                val originalUrl = currentUrl.toOriginalArticleUrl()
+                                if (!currentUrl.isReaderServiceUrl() && originalUrl.isLikelyWebUrl()) {
+                                    onRecordVisit(currentTitle, originalUrl, sourceName)
+                                    onMarkRead(originalUrl)
                                 }
                             }
 
-                            override fun doUpdateVisitedHistory(
-                                view: WebView?,
-                                url: String?,
-                                isReload: Boolean,
-                            ) {
-                                currentUrl = url ?: view?.url ?: currentUrl
-                                updateNavigationState(view)
-                            }
-
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                            ): Boolean {
-                                if (request?.isForMainFrame != true) {
-                                    return false
+                                override fun doUpdateVisitedHistory(
+                                    view: WebView?,
+                                    url: String?,
+                                    isReload: Boolean,
+                                ) {
+                                    currentUrl = url ?: view?.url ?: currentUrl
+                                    updateNavigationState(view)
                                 }
 
-                                val url = request.url
-                                val scheme = url.scheme
-                                if (scheme != "http" && scheme != "https") {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                ): Boolean {
+                                    if (request?.isForMainFrame != true) {
+                                        return false
+                                    }
+
+                                    val url = request.url
+                                    val scheme = url.scheme
+                                    if (scheme != "http" && scheme != "https") {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                                        return true
+                                    }
+
+                                if (
+                                    request.hasGesture() &&
+                                    !url.isReaderServiceUrl() &&
+                                    url.isLikelyArticleUrl()
+                                ) {
+                                    view?.loadPrimaryReader(url)
                                     return true
                                 }
 
-                                return false
-                            }
+                                    return false
+                                }
 
-                            override fun onReceivedError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                error: WebResourceError?,
-                            ) {
-                                if (request?.isForMainFrame == true) {
-                                    isLoading = false
-                                    hasError = true
-                                    updateNavigationState(view)
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?,
+                                ) {
+                                    if (request?.isForMainFrame == true) {
+                                        isLoading = false
+                                        hasError = true
+                                        updateNavigationState(view)
+                                    }
+                                }
+
+                                override fun shouldInterceptRequest(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                ): WebResourceResponse? {
+                                    val url = request?.url ?: return null
+                                    return if (!request.isForMainFrame && url.isBlockedAdResource()) {
+                                        emptyWebResponse()
+                                    } else {
+                                        null
+                                    }
                                 }
                             }
-
-                            override fun shouldInterceptRequest(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                            ): WebResourceResponse? {
-                                val url = request?.url ?: return null
-                                return if (!request.isForMainFrame && url.isBlockedAdResource()) {
-                                    emptyWebResponse()
-                                } else {
-                                    null
-                                }
-                            }
+                            loadUrl(initialUrl)
+                            webView = this
                         }
-                        loadUrl(initialUrl)
-                        webView = this
-                    }
-                },
-                update = { view ->
-                    webView = view
-                    updateNavigationState(view)
-                    if (view.url == null) {
-                        view.loadUrl(initialUrl)
-                    }
-                },
-            )
+                    },
+                    update = { view ->
+                        webView = view
+                        updateNavigationState(view)
+                        if (view.url == null) {
+                            view.loadUrl(initialUrl)
+                        }
+                    },
+                )
+            }
 
             if (isLoading && progress in 1..99) {
                 LinearWavyProgressIndicator(
@@ -291,6 +353,9 @@ fun ReaderScreen(
                 },
                 onOpenOriginal = openOriginal,
                 onOpenReader = openReaderVersion,
+                onSaveForLater = saveCurrentForLater,
+                onOpenArchive = openArchiveSearch,
+                onMarkRead = markCurrentRead,
                 onShare = shareOriginal,
                 modifier = Modifier
                     .align(toolbarAlignment)
@@ -323,6 +388,9 @@ private fun ReaderFloatingToolbar(
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
+    onSaveForLater: () -> Unit,
+    onOpenArchive: () -> Unit,
+    onMarkRead: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -350,6 +418,9 @@ private fun ReaderFloatingToolbar(
                 onNavigateForward = onNavigateForward,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
+                onSaveForLater = onSaveForLater,
+                onOpenArchive = onOpenArchive,
+                onMarkRead = onMarkRead,
                 onShare = onShare,
             )
         }
@@ -377,6 +448,9 @@ private fun ReaderFloatingToolbar(
                 onNavigateForward = onNavigateForward,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
+                onSaveForLater = onSaveForLater,
+                onOpenArchive = onOpenArchive,
+                onMarkRead = onMarkRead,
                 onShare = onShare,
             )
         }
@@ -410,12 +484,15 @@ private fun ReaderToolbarActions(
     onNavigateForward: () -> Unit,
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
+    onSaveForLater: () -> Unit,
+    onOpenArchive: () -> Unit,
+    onMarkRead: () -> Unit,
     onShare: () -> Unit,
 ) {
     if (showBackButton) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                imageVector = Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.reader_back),
             )
         }
@@ -444,10 +521,28 @@ private fun ReaderToolbarActions(
             contentDescription = stringResource(R.string.reader_open_original),
         )
     }
+    IconButton(onClick = onSaveForLater) {
+        Icon(
+            imageVector = Icons.Rounded.Bookmark,
+            contentDescription = stringResource(R.string.reader_save_later),
+        )
+    }
     IconButton(onClick = onOpenReader) {
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.Article,
             contentDescription = stringResource(R.string.reader_open_reader),
+        )
+    }
+    IconButton(onClick = onOpenArchive) {
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = stringResource(R.string.reader_open_archive),
+        )
+    }
+    IconButton(onClick = onMarkRead) {
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = stringResource(R.string.reader_mark_read),
         )
     }
     if (showShareAction) {
@@ -462,12 +557,15 @@ private fun ReaderToolbarActions(
 
 private const val REMOVE_PAYWALLS_HOST = "removepaywalls.com"
 private const val ARTICLE_READER_HOST = "accessarticlenow.com"
+private const val UNWALL_HOST = "unwall.app"
+private const val ARCHIVE_FO_HOST = "archive.fo"
 
 private val ALLOWED_READER_HOSTS = setOf(
     REMOVE_PAYWALLS_HOST,
     ARTICLE_READER_HOST,
+    UNWALL_HOST,
     "archive.today",
-    "archive.fo",
+    ARCHIVE_FO_HOST,
     "archive.is",
     "archive.ph",
 )
@@ -496,10 +594,52 @@ private val BLOCKED_AD_PATH_PARTS = listOf(
 private fun Uri.toArticleReaderUrl(): String =
     "https://$ARTICLE_READER_HOST/api/c/full?q=${Uri.encode(toString())}"
 
-private fun String.isRemovePaywallsUrl(): Boolean =
-    runCatching { Uri.parse(this).host == REMOVE_PAYWALLS_HOST }.getOrDefault(false)
+private fun Uri.toUnwallUrl(): String =
+    "https://$UNWALL_HOST/${toString().removePrefix("https://").removePrefix("http://")}?reader=1"
+
+private fun String.isReaderServiceUrl(): Boolean =
+    runCatching { Uri.parse(this).isReaderServiceUrl() }.getOrDefault(false)
 
 private fun Uri.isReaderServiceUrl(): Boolean = host in ALLOWED_READER_HOSTS
+
+private fun String.toOriginalArticleUrl(): String =
+    runCatching {
+        val uri = Uri.parse(this)
+        uri.readerOriginalUrl() ?: this
+    }.getOrDefault(this)
+
+private fun String.toArchiveSearchUrl(): String =
+    "https://archive.ph/search/?q=${Uri.encode(this)}"
+
+private fun String.isLikelyWebUrl(): Boolean =
+    runCatching {
+        val uri = Uri.parse(this)
+        uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
+    }.getOrDefault(false)
+
+private fun Uri.readerOriginalUrl(): String? {
+    return when (host) {
+        ARTICLE_READER_HOST -> getQueryParameter("q")
+        UNWALL_HOST -> {
+            val pathUrl = toString()
+                .substringAfter("https://$UNWALL_HOST/", "")
+                .substringBefore("?")
+            if (pathUrl.isNotBlank()) "https://$pathUrl" else null
+        }
+        REMOVE_PAYWALLS_HOST -> toString().removePrefix("https://$REMOVE_PAYWALLS_HOST/")
+            .removePrefix("http://$REMOVE_PAYWALLS_HOST/")
+        ARCHIVE_FO_HOST -> toString().removePrefix("https://$ARCHIVE_FO_HOST/")
+            .removePrefix("http://$ARCHIVE_FO_HOST/")
+        else -> null
+    }
+}
+
+private fun Uri.isLikelyArticleUrl(): Boolean {
+    val segments = pathSegments.filter { it.isNotBlank() }
+    val lastSegment = segments.lastOrNull().orEmpty()
+    return segments.size >= 3 ||
+        (segments.size >= 2 && lastSegment.length >= 20 && ("-" in lastSegment || lastSegment.endsWith(".html")))
+}
 
 private fun Uri.isBlockedAdResource(): Boolean {
     val normalizedHost = host?.lowercase().orEmpty()
@@ -517,6 +657,124 @@ private fun emptyWebResponse(): WebResourceResponse =
         mapOf("Access-Control-Allow-Origin" to "*"),
         ByteArrayInputStream(ByteArray(0)),
     )
+
+private fun WebView.applySiteChromeCleanup() {
+    evaluateJavascript(
+        """
+        (function() {
+          var style = document.getElementById('paywall-reader-site-cleanup-style');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = 'paywall-reader-site-cleanup-style';
+            style.textContent = `
+              dual-offer-banner,
+              #base-banner,
+              .base-banner {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                pointer-events: none !important;
+              }
+            `;
+            document.head.appendChild(style);
+          }
+
+          function isVisible(element) {
+            return !!(element && element.getClientRects && element.getClientRects().length);
+          }
+
+          function clickIfVisible(selector) {
+            document.querySelectorAll(selector).forEach(function(element) {
+              if (isVisible(element)) {
+                element.click();
+              }
+            });
+          }
+
+          clickIfVisible('dual-offer-banner[open] #banner-toggle[aria-label="Collapse"]');
+
+          document.querySelectorAll('dual-offer-banner[open]').forEach(function(element) {
+            element.removeAttribute('open');
+          });
+
+          document.querySelectorAll(
+            '[data-testid="modal-close"], [data-testid="close-button"], ' +
+            'button[aria-label="Close"], button[aria-label="close"], ' +
+            'button[aria-label="Dismiss"], button[aria-label="dismiss"], ' +
+            'button[aria-label="Collapse"]'
+          ).forEach(function(button) {
+            var container = button.closest('[role="dialog"], [aria-modal="true"], dialog, .modal, .overlay');
+            var text = ((container || button.parentElement || button).innerText || '').toLowerCase();
+            if (
+              text.indexOf('subscribe') !== -1 ||
+              text.indexOf('sign up') !== -1 ||
+              text.indexOf('newsletter') !== -1 ||
+              text.indexOf('unlimited access') !== -1 ||
+              text.indexOf('get access') !== -1 ||
+              text.indexOf('continue reading') !== -1
+            ) {
+              button.click();
+            }
+          });
+
+          document.documentElement.style.overflow = '';
+          if (document.body) {
+            document.body.style.overflow = '';
+          }
+        })();
+        """.trimIndent(),
+        null,
+    )
+}
+
+private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: Long) {
+    val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
+    if (loadedUri.host != ARTICLE_READER_HOST && loadedUri.host != UNWALL_HOST) {
+        return
+    }
+
+    postDelayed(
+        {
+            evaluateJavascript(
+                """
+                (function() {
+                  var text = document.body ? (document.body.innerText || '').trim() : '';
+                  var media = document.querySelectorAll('article, main, img, video, iframe').length;
+                  return text.length + media;
+                })();
+                """.trimIndent(),
+            ) { result ->
+                val pageWeight = result?.trim('"')?.toIntOrNull() ?: 0
+                val currentHost = runCatching { Uri.parse(url).host }.getOrNull()
+                if (pageWeight < 300 && (currentHost == ARTICLE_READER_HOST || currentHost == UNWALL_HOST)) {
+                    val originalUrl = runCatching { Uri.parse(url).readerOriginalUrl() }.getOrNull()
+                    if (!originalUrl.isNullOrBlank()) {
+                        val originalUri = Uri.parse(originalUrl)
+                        when (currentHost) {
+                            ARTICLE_READER_HOST -> {
+                                val fallbackUrl = originalUri.toUnwallUrl()
+                                settings.javaScriptEnabled = true
+                                loadUrl(fallbackUrl)
+                            }
+
+                            UNWALL_HOST -> {
+                                settings.javaScriptEnabled = false
+                                loadUrl(originalUrl)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        delayMillis,
+    )
+}
+
+private fun WebView.loadPrimaryReader(uri: Uri) {
+    settings.javaScriptEnabled = true
+    loadUrl(uri.toArticleReaderUrl())
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -607,53 +865,11 @@ private fun WebView.applyReaderChrome() {
             style.id = 'paywall-reader-style';
             style.textContent = `
               .promo-bar { display: none !important; }
-              #topFrame {
-                position: fixed !important;
-                top: 12px !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                z-index: 2147483647 !important;
-                width: auto !important;
-                max-width: calc(100vw - 20px) !important;
-                height: auto !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                background: transparent !important;
-                border: 0 !important;
-                box-shadow: none !important;
-              }
-              #topFrame .brand,
-              #topFrame .brand-name,
-              #topFrame .header-divider,
-              #topFrame .header-spacer,
-              #topFrame img {
+              #topFrame,
+              [data-testid="reader-toolbar"] {
                 display: none !important;
               }
-              #topFrame .header-row,
-              #topFrame .option-row {
-                display: flex !important;
-                width: auto !important;
-                gap: 6px !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-wrap: wrap !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                background: transparent !important;
-              }
-              #topFrame .option-button {
-                min-width: 42px !important;
-                border-radius: 10px !important;
-                padding: 9px 11px !important;
-                background: rgba(16, 20, 17, 0.9) !important;
-                color: white !important;
-                border: 1px solid rgba(255,255,255,0.18) !important;
-                box-shadow: 0 8px 22px rgba(0,0,0,0.22) !important;
-                text-decoration: none !important;
-                font-weight: 700 !important;
-                letter-spacing: 0 !important;
-              }
-              body { padding-top: 58px !important; }
+              body { padding-top: 0 !important; }
             `;
             document.head.appendChild(style);
           }

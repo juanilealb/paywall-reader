@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,13 +15,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -40,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -47,8 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
+import com.juani.paywallreader.domain.model.HistoryItem
+import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.ui.components.AddSourceSheet
+import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 
@@ -59,14 +70,39 @@ fun HomeRoute(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
-    val sources by viewModel.sources.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    val readLaterLabel = stringResource(R.string.read_later)
+    val historyLabel = stringResource(R.string.history)
 
     HomeScreen(
-        sources = sources,
+        uiState = uiState,
         onSourceClick = onSourceClick,
+        onReadingItemClick = { item ->
+            onSourceClick(
+                Source(
+                    id = -item.id,
+                    name = item.title,
+                    url = item.url,
+                    isDefault = false,
+                    folderName = readLaterLabel,
+                ),
+            )
+        },
+        onHistoryItemClick = { item ->
+            onSourceClick(
+                Source(
+                    id = -item.id,
+                    name = item.title,
+                    url = item.url,
+                    isDefault = false,
+                    folderName = historyLabel,
+                ),
+            )
+        },
         onAddSource = viewModel::addSource,
         onDeleteSource = viewModel::deleteSource,
-        existingUrls = sources.map { it.url }.toSet(),
+        onMarkRead = viewModel::markRead,
+        existingUrls = uiState.sources.map { it.url }.toSet(),
         modifier = modifier,
     )
 }
@@ -82,17 +118,27 @@ private fun homeViewModel(): HomeViewModel {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
-    sources: List<Source>,
+    uiState: HomeUiState,
     onSourceClick: (Source) -> Unit,
-    onAddSource: (name: String, url: String) -> Unit,
+    onReadingItemClick: (ReadingItem) -> Unit,
+    onHistoryItemClick: (HistoryItem) -> Unit,
+    onAddSource: (name: String, url: String, folderName: String) -> Unit,
     onDeleteSource: (Source) -> Unit,
+    onMarkRead: (String) -> Unit,
     existingUrls: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
+    var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
+    val folders = remember(uiState.sources) {
+        uiState.sources.map { it.folderName }.distinct().sorted()
+    }
+    val visibleSources = remember(uiState.sources, selectedFolder) {
+        selectedFolder?.let { folder -> uiState.sources.filter { it.folderName == folder } } ?: uiState.sources
+    }
 
     BackHandler(fabMenuExpanded) {
         fabMenuExpanded = false
@@ -168,7 +214,37 @@ fun HomeScreen(
                     HomeHeader(compact = maxWidth < 480.dp)
                 }
 
-                if (sources.isEmpty()) {
+                if (folders.isNotEmpty()) {
+                    item {
+                        FolderChips(
+                            folders = folders,
+                            selectedFolder = selectedFolder,
+                            onFolderSelected = { selectedFolder = it },
+                        )
+                    }
+                }
+
+                if (uiState.readingItems.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            icon = Icons.Rounded.Bookmark,
+                            title = stringResource(R.string.read_later),
+                            count = uiState.readingItems.size,
+                        )
+                    }
+                    items(
+                        items = uiState.readingItems,
+                        key = { "read-${it.id}" },
+                    ) { item ->
+                        ReadingListItem(
+                            item = item,
+                            onClick = { onReadingItemClick(item) },
+                            onMarkRead = { onMarkRead(item.url) },
+                        )
+                    }
+                }
+
+                if (visibleSources.isEmpty() && uiState.readingItems.isEmpty()) {
                     item {
                         EmptySources(
                             modifier = Modifier
@@ -177,15 +253,43 @@ fun HomeScreen(
                         )
                     }
                 } else {
+                    if (visibleSources.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                icon = Icons.Rounded.Folder,
+                                title = selectedFolder ?: stringResource(R.string.all_sources),
+                                count = visibleSources.size,
+                            )
+                        }
+                    }
                     items(
-                        items = sources,
-                        key = { it.id },
+                        items = visibleSources,
+                        key = { "source-${it.id}" },
                     ) { source ->
                         SourceCard(
                             source = source,
                             onClick = onSourceClick,
                             onDelete = onDeleteSource,
                             deleteLabel = stringResource(R.string.delete),
+                        )
+                    }
+                }
+
+                if (uiState.historyItems.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            icon = Icons.Rounded.History,
+                            title = stringResource(R.string.history),
+                            count = uiState.historyItems.size,
+                        )
+                    }
+                    items(
+                        items = uiState.historyItems.take(12),
+                        key = { "history-${it.id}" },
+                    ) { item ->
+                        HistoryListItem(
+                            item = item,
+                            onClick = { onHistoryItemClick(item) },
                         )
                     }
                 }
@@ -196,20 +300,146 @@ fun HomeScreen(
     if (showAddSourceSheet) {
         AddSourceSheet(
             onSave = onAddSource,
-            onSaveAndOpen = { name, url ->
-                onAddSource(name, url)
+            onSaveAndOpen = { name, url, folderName ->
+                onAddSource(name, url, folderName)
                 onSourceClick(
                     Source(
                         id = 0,
                         name = name,
                         url = url,
                         isDefault = false,
+                        folderName = folderName,
                     ),
                 )
             },
             onDismiss = { showAddSourceSheet = false },
             existingUrls = existingUrls,
             initialUrl = addSourceInitialUrl,
+        )
+    }
+}
+
+@Composable
+private fun FolderChips(
+    folders: List<String>,
+    selectedFolder: String?,
+    onFolderSelected: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = selectedFolder == null,
+            onClick = { onFolderSelected(null) },
+            label = { Text(stringResource(R.string.all_sources)) },
+        )
+        folders.take(3).forEach { folder ->
+            FilterChip(
+                selected = selectedFolder == folder,
+                onClick = { onFolderSelected(folder) },
+                label = { Text(folder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Rounded.Folder, contentDescription = null)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    count: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ReadingListItem(
+    item: ReadingItem,
+    onClick: () -> Unit,
+    onMarkRead: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.48f),
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Text(item.url.toDisplayHost(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            leadingContent = {
+                BrowserFavicon(url = item.url, fallbackText = item.title)
+            },
+            trailingContent = {
+                androidx.compose.material3.IconButton(onClick = onMarkRead) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = stringResource(R.string.mark_read),
+                    )
+                }
+            },
+            colors = androidx.compose.material3.ListItemDefaults.colors(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun HistoryListItem(
+    item: HistoryItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Text(item.url.toDisplayHost(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            leadingContent = {
+                BrowserFavicon(url = item.url, fallbackText = item.title)
+            },
+            colors = androidx.compose.material3.ListItemDefaults.colors(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            ),
         )
     }
 }
@@ -336,24 +566,35 @@ private annotation class HomeFormFactorPreviews
 private fun HomeScreenPreview() {
     PaywallReaderTheme {
         HomeScreen(
-            sources = listOf(
-                Source(
-                    id = 1,
-                    name = "Example",
-                    url = "https://example.com",
-                    isDefault = true,
-                ),
-                Source(
-                    id = 2,
-                    name = "News",
-                    url = "https://news.example.com",
-                    isDefault = false,
+            uiState = HomeUiState(
+                sources = listOf(
+                    Source(
+                        id = 1,
+                        name = "Example",
+                        url = "https://example.com",
+                        isDefault = false,
+                    ),
+                    Source(
+                        id = 2,
+                        name = "News",
+                        url = "https://news.example.com",
+                        isDefault = false,
+                    ),
                 ),
             ),
             onSourceClick = {},
-            onAddSource = { _, _ -> },
+            onReadingItemClick = {},
+            onHistoryItemClick = {},
+            onAddSource = { _, _, _ -> },
             onDeleteSource = {},
+            onMarkRead = {},
             existingUrls = emptySet(),
         )
     }
 }
+
+private fun String.toDisplayHost(): String =
+    removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore("/")
+        .removePrefix("www.")

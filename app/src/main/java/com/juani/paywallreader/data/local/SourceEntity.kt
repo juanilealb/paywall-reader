@@ -10,5 +10,6 @@ data class SourceEntity(
     val name: String,
     val url: String,
     val isDefault: Boolean = false,
+    val folderName: String = "News",
     val createdAt: Long = System.currentTimeMillis(),
 )

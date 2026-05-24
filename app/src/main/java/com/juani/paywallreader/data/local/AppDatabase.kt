@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [SourceEntity::class],
-    version = 2,
+    entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .addCallback(DefaultSourcesCallback())
                 .build()
 
@@ -37,6 +37,37 @@ abstract class AppDatabase : RoomDatabase() {
                 DEFAULT_SOURCES.forEach { source ->
                     db.insert("sources", 0, source.toContentValues())
                 }
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sources ADD COLUMN folderName TEXT NOT NULL DEFAULT 'News'")
+                db.execSQL("UPDATE sources SET isDefault = 0")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS reading_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        sourceName TEXT NOT NULL,
+                        addedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reading_items_url ON reading_items(url)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS history_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        sourceName TEXT NOT NULL,
+                        visitedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_history_items_url ON history_items(url)")
             }
         }
     }
@@ -55,31 +86,36 @@ private val DEFAULT_SOURCES = listOf(
     SourceEntity(
         name = "Clarín",
         url = "https://www.clarin.com",
-        isDefault = true,
+        isDefault = false,
+        folderName = "News",
         createdAt = 1,
     ),
     SourceEntity(
         name = "The Verge",
         url = "https://www.theverge.com",
-        isDefault = true,
+        isDefault = false,
+        folderName = "News",
         createdAt = 2,
     ),
     SourceEntity(
         name = "The New York Times",
         url = "https://www.nytimes.com",
-        isDefault = true,
+        isDefault = false,
+        folderName = "News",
         createdAt = 3,
     ),
     SourceEntity(
         name = "WIRED",
         url = "https://www.wired.com",
-        isDefault = true,
+        isDefault = false,
+        folderName = "News",
         createdAt = 4,
     ),
     SourceEntity(
         name = "The Economist",
         url = "https://www.economist.com",
-        isDefault = true,
+        isDefault = false,
+        folderName = "News",
         createdAt = 5,
     ),
 )
@@ -89,5 +125,6 @@ private fun SourceEntity.toContentValues(): ContentValues =
         put("name", name)
         put("url", url)
         put("isDefault", isDefault)
+        put("folderName", folderName)
         put("createdAt", createdAt)
     }

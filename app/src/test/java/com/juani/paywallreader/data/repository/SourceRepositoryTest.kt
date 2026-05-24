@@ -1,6 +1,8 @@
 package com.juani.paywallreader.data.repository
 
 import com.juani.paywallreader.data.local.SourceDao
+import com.juani.paywallreader.data.local.HistoryEntity
+import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.domain.model.Source
 import kotlinx.coroutines.flow.Flow
@@ -44,18 +46,18 @@ class SourceRepositoryTest {
     }
 
     @Test
-    fun `deleteSource ignores default sources`() = runTest {
-        val defaultSource = Source(
+    fun `deleteSource removes former default sources`() = runTest {
+        val source = Source(
             id = 1,
-            name = "Default",
-            url = "https://default.com",
+            name = "News",
+            url = "https://news.com",
             isDefault = true,
         )
-        sourceDao.seed(defaultSource.toEntity(createdAt = 1))
+        sourceDao.seed(source.toEntity(createdAt = 1))
 
-        repository.deleteSource(defaultSource)
+        repository.deleteSource(source)
 
-        assertEquals(1, sourceDao.entities.value.size)
+        assertTrue(sourceDao.entities.value.isEmpty())
     }
 
     @Test
@@ -76,9 +78,17 @@ class SourceRepositoryTest {
 
 private class FakeSourceDao : SourceDao {
     val entities = MutableStateFlow<List<SourceEntity>>(emptyList())
+    val readingItems = MutableStateFlow<List<ReadingItemEntity>>(emptyList())
+    val historyItems = MutableStateFlow<List<HistoryEntity>>(emptyList())
     private var nextId = 1L
+    private var nextReadingId = 1L
+    private var nextHistoryId = 1L
 
     override fun getAll(): Flow<List<SourceEntity>> = entities
+
+    override fun getReadingItems(): Flow<List<ReadingItemEntity>> = readingItems
+
+    override fun getHistoryItems(): Flow<List<HistoryEntity>> = historyItems
 
     override suspend fun insert(source: SourceEntity): Long {
         if (countByUrl(source.url) > 0) {
@@ -104,6 +114,28 @@ private class FakeSourceDao : SourceDao {
 
     override suspend fun count(): Int = entities.value.size
 
+    override suspend fun upsertReadingItem(item: ReadingItemEntity) {
+        val entity = item.copy(id = item.id.takeIf { it != 0L } ?: nextReadingId++)
+        readingItems.value = readingItems.value.filterNot { it.url == item.url } + entity
+    }
+
+    override suspend fun deleteReadingItem(url: String) {
+        readingItems.value = readingItems.value.filterNot { it.url == url }
+    }
+
+    override suspend fun countReadingItem(url: String): Int =
+        readingItems.value.count { it.url == url }
+
+    override suspend fun insertHistoryItem(item: HistoryEntity): Long {
+        val entity = item.copy(id = item.id.takeIf { it != 0L } ?: nextHistoryId++)
+        historyItems.value = historyItems.value + entity
+        return entity.id
+    }
+
+    override suspend fun trimHistory(limit: Int) {
+        historyItems.value = historyItems.value.sortedByDescending { it.visitedAt }.take(limit)
+    }
+
     fun seed(vararg sources: SourceEntity) {
         entities.value = sources.toList()
         nextId = (sources.maxOfOrNull { it.id } ?: 0L) + 1
@@ -116,5 +148,6 @@ private fun Source.toEntity(createdAt: Long): SourceEntity =
         name = name,
         url = url,
         isDefault = isDefault,
+        folderName = folderName,
         createdAt = createdAt,
     )

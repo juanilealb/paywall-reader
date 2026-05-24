@@ -5,6 +5,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import android.graphics.BitmapFactory
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -27,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,6 +50,9 @@ import com.juani.paywallreader.R
 import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import com.juani.paywallreader.ui.theme.PaywallReaderMotion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.URL
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -69,7 +78,7 @@ fun SourceCard(
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
+                .height(72.dp)
                 .scale(cardScale)
                 .combinedClickable(
                     interactionSource = interactionSource,
@@ -92,11 +101,11 @@ fun SourceCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
+                    .padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SourceMark(source.name)
+                BrowserFavicon(url = source.url, fallbackText = source.name)
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -109,24 +118,18 @@ fun SourceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = if (source.isDefault) {
-                            "${stringResource(R.string.default_source_label)} · $host"
-                        } else {
-                            host
-                        },
+                        text = "${source.folderName} · $host",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (!source.isDefault) {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = stringResource(R.string.source_options),
-                        )
-                    }
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(R.string.source_options),
+                    )
                 }
             }
         }
@@ -170,23 +173,57 @@ fun SourceCard(
 }
 
 @Composable
-private fun SourceMark(name: String) {
-    val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-    Surface(
-        modifier = Modifier.size(44.dp),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = initial,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
+fun BrowserFavicon(
+    url: String,
+    fallbackText: String,
+    modifier: Modifier = Modifier,
+) {
+    var imageBitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(url) {
+        imageBitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                URL(url.toFaviconUrl()).openStream().use { BitmapFactory.decodeStream(it) }
+            }.getOrNull()
         }
     }
+
+    Surface(
+        modifier = modifier.size(40.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = 2.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .padding(7.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val bitmap = imageBitmap
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(26.dp),
+                )
+            } else {
+                SourceMark(fallbackText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceMark(name: String) {
+    val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+    Text(
+        text = initial,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+    )
 }
 
 private fun String.toDisplayHost(): String =
@@ -194,6 +231,9 @@ private fun String.toDisplayHost(): String =
         .removePrefix("http://")
         .substringBefore("/")
         .removePrefix("www.")
+
+private fun String.toFaviconUrl(): String =
+    "https://www.google.com/s2/favicons?domain_url=${toDisplayHost()}&sz=64"
 
 @Preview(showBackground = true)
 @Composable
