@@ -1039,6 +1039,7 @@ private fun SectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(48.dp)
             .padding(top = 10.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1057,7 +1058,12 @@ private fun SectionHeader(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        action?.invoke()
+        Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            action?.invoke()
+        }
     }
 }
 
