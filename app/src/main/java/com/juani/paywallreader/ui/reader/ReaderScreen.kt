@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -154,10 +155,14 @@ fun ReaderScreen(
     var hasError by remember { mutableStateOf(false) }
     var canNavigateBack by remember { mutableStateOf(false) }
     var canNavigateForward by remember { mutableStateOf(false) }
+    var isAuthSurface by remember { mutableStateOf(false) }
     var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim()) }
     var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim()
+    }
+    val detectsAuthSurfaces = remember(initialUrl) {
+        initialUrl.isBlogAuthHost()
     }
     var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
@@ -217,7 +222,11 @@ fun ReaderScreen(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
                         WebView(context).apply {
-                            configureReaderSettings()
+                            configureReaderSettings(useBrowserUserAgent = detectsAuthSurfaces)
+                            addJavascriptInterface(
+                                ReaderPageSignalBridge(this, detectsAuthSurfaces) { isAuthSurface = it },
+                                "PaywallReaderBridge",
+                            )
                             webChromeClient = object : WebChromeClient() {
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 progress = newProgress
@@ -243,15 +252,20 @@ fun ReaderScreen(
                                 CookieManager.getInstance().flush()
                                 updateNavigationState(view)
                                     view?.applyAdCleanup()
-                                    view?.applySiteChromeCleanup()
-                                    view?.postDelayed({ view.applySiteChromeCleanup() }, 700L)
-                                    view?.postDelayed({ view.applySiteChromeCleanup() }, 1_800L)
+                                    if (!detectsAuthSurfaces) {
+                                        view?.applySiteChromeCleanup()
+                                        view?.postDelayed({ view.applySiteChromeCleanup() }, 700L)
+                                        view?.postDelayed({ view.applySiteChromeCleanup() }, 1_800L)
+                                    }
+                                    view?.installPageStateSignals(detectsAuthSurfaces)
                                     if (url?.isReaderServiceUrl() == true) {
                                     view?.applyReaderChrome()
                                     view?.postDelayed({ view.applyReaderChrome() }, 700L)
                                         view?.loadFallbackReaderIfBlank(url, 2_500L)
                                 }
-                                view?.loadFallbackReaderIfPaywalled(url, 2_500L)
+                                if (!isAuthSurface) {
+                                    view?.loadFallbackReaderIfPaywalled(url, 2_500L)
+                                }
                                 val originalUrl = currentUrl.toOriginalArticleUrl()
                                 if (!currentUrl.isReaderServiceUrl() && originalUrl.isLikelyWebUrl()) {
                                     onRecordVisit(currentTitle, originalUrl, sourceName)
@@ -285,6 +299,8 @@ fun ReaderScreen(
 
                                 if (
                                     request.hasGesture() &&
+                                    !detectsAuthSurfaces &&
+                                    !isAuthSurface &&
                                     !url.isReaderServiceUrl() &&
                                     url.isLikelyArticleUrl()
                                 ) {
@@ -361,54 +377,56 @@ fun ReaderScreen(
                 }
             }
 
-            ReaderFloatingToolbar(
-                showBackButton = showBackButton,
-                canNavigateBack = canNavigateBack,
-                canNavigateForward = canNavigateForward,
-                isLoading = isLoading,
-                vertical = useVerticalToolbar,
-                expanded = if (useVerticalToolbar) toolbarExpanded else true,
-                showShareAction = showShareAction && !useVerticalToolbar,
-                onExpandedChange = { toolbarExpanded = it },
-                onBack = onBack,
-                onNavigateBack = {
-                    webView?.goBack()
-                    updateNavigationState(webView)
-                },
-                onNavigateForward = {
-                    webView?.goForward()
-                    updateNavigationState(webView)
-                },
-                onRefreshOrStop = {
-                    if (isLoading) {
-                        webView?.stopLoading()
-                        isLoading = false
-                    } else {
-                        webView?.reload()
-                    }
-                },
-                onOpenOriginal = openOriginal,
-                onOpenReader = openReaderVersion,
-                onSaveForLater = saveCurrentForLater,
-                onMarkRead = markCurrentRead,
-                onShare = shareOriginal,
-                archiveMode = isArchivePage,
-                modifier = Modifier
-                    .align(toolbarAlignment)
-                    .then(
-                        if (useVerticalToolbar) {
-                            Modifier
-                                .padding(WindowInsets.safeDrawing.asPaddingValues())
-                                .padding(end = 16.dp, bottom = 8.dp)
-                                .zIndex(1f)
+            if (!isAuthSurface) {
+                ReaderFloatingToolbar(
+                    showBackButton = showBackButton,
+                    canNavigateBack = canNavigateBack,
+                    canNavigateForward = canNavigateForward,
+                    isLoading = isLoading,
+                    vertical = useVerticalToolbar,
+                    expanded = if (useVerticalToolbar) toolbarExpanded else true,
+                    showShareAction = showShareAction && !useVerticalToolbar,
+                    onExpandedChange = { toolbarExpanded = it },
+                    onBack = onBack,
+                    onNavigateBack = {
+                        webView?.goBack()
+                        updateNavigationState(webView)
+                    },
+                    onNavigateForward = {
+                        webView?.goForward()
+                        updateNavigationState(webView)
+                    },
+                    onRefreshOrStop = {
+                        if (isLoading) {
+                            webView?.stopLoading()
+                            isLoading = false
                         } else {
-                            Modifier
-                                .padding(WindowInsets.safeDrawing.asPaddingValues())
-                                .padding(16.dp)
-                                .widthIn(max = 520.dp)
-                        },
-                    ),
-            )
+                            webView?.reload()
+                        }
+                    },
+                    onOpenOriginal = openOriginal,
+                    onOpenReader = openReaderVersion,
+                    onSaveForLater = saveCurrentForLater,
+                    onMarkRead = markCurrentRead,
+                    onShare = shareOriginal,
+                    archiveMode = isArchivePage,
+                    modifier = Modifier
+                        .align(toolbarAlignment)
+                        .then(
+                            if (useVerticalToolbar) {
+                                Modifier
+                                    .padding(WindowInsets.safeDrawing.asPaddingValues())
+                                    .padding(end = 16.dp, bottom = 8.dp)
+                                    .zIndex(1f)
+                            } else {
+                                Modifier
+                                    .padding(WindowInsets.safeDrawing.asPaddingValues())
+                                    .padding(16.dp)
+                                    .widthIn(max = 520.dp)
+                            },
+                        ),
+                )
+            }
         }
     }
 }
@@ -675,6 +693,13 @@ private val ALLOWED_READER_HOSTS = setOf(
 private val PAYWALL_FALLBACK_HOSTS = setOf(
     "www.wired.com",
     "wired.com",
+    "medium.com",
+    "substack.com",
+)
+
+private val BLOG_AUTH_HOSTS = setOf(
+    "medium.com",
+    "substack.com",
 )
 
 private val BLOCKED_AD_HOST_PARTS = listOf(
@@ -728,6 +753,19 @@ private fun String.isLikelyWebUrl(): Boolean =
         val uri = Uri.parse(this)
         uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
     }.getOrDefault(false)
+
+private fun String.isBlogAuthHost(): Boolean =
+    runCatching { Uri.parse(this).isBlogAuthHost() }.getOrDefault(false)
+
+private fun Uri.isBlogAuthHost(): Boolean {
+    val normalizedHost = host?.removePrefix("www.") ?: return false
+    return BLOG_AUTH_HOSTS.any { normalizedHost == it || normalizedHost.endsWith(".$it") }
+}
+
+private fun Uri.isPaywallFallbackHost(): Boolean {
+    val normalizedHost = host?.removePrefix("www.") ?: return false
+    return PAYWALL_FALLBACK_HOSTS.any { normalizedHost == it || normalizedHost.endsWith(".$it") }
+}
 
 private fun Uri.readerOriginalUrl(): String? {
     return when (host) {
@@ -945,6 +983,93 @@ private fun WebView.applySiteChromeCleanup() {
     )
 }
 
+private class ReaderPageSignalBridge(
+    private val webView: WebView,
+    private val enabled: Boolean,
+    private val onAuthSurfaceChanged: (Boolean) -> Unit,
+) {
+    @JavascriptInterface
+    fun setAuthSurface(active: Boolean) {
+        if (!enabled) return
+        webView.post {
+            onAuthSurfaceChanged(active)
+        }
+    }
+}
+
+private fun WebView.installPageStateSignals(enabled: Boolean) {
+    if (!enabled) {
+        return
+    }
+
+    evaluateJavascript(
+        """
+        (function() {
+          if (!window.PaywallReaderBridge) {
+            return;
+          }
+
+          var style = document.getElementById('paywall-reader-blog-auth-style');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = 'paywall-reader-blog-auth-style';
+            style.textContent = `
+              html.paywall-reader-auth-surface,
+              html.paywall-reader-auth-surface body,
+              html.paywall-reader-auth-surface [role="dialog"][aria-modal="true"] {
+                background: #f7f4ed !important;
+                color: #242424 !important;
+              }
+            `;
+            document.head.appendChild(style);
+          }
+
+          function hasAuthSurface() {
+            var text = document.body ? (document.body.innerText || '').toLowerCase() : '';
+            var hasAuthCopy = [
+              'welcome back',
+              'sign in with google',
+              'sign in with facebook',
+              'sign in with apple',
+              'sign in with x',
+              'sign in with email',
+              'continue with google',
+              'continue with email',
+              'remember me for faster sign in',
+              'forgot email',
+              'sign in to medium',
+              'sign in to substack'
+            ].some(function(marker) { return text.indexOf(marker) !== -1; });
+            var hasAuthControls = !!document.querySelector(
+              '[role="dialog"], [aria-modal="true"], dialog, form, input[type="email"], input[type="password"]'
+            );
+            return hasAuthCopy && hasAuthControls;
+          }
+
+          function emitAuthSurface() {
+            var active = hasAuthSurface();
+            document.documentElement.classList.toggle('paywall-reader-auth-surface', active);
+            window.PaywallReaderBridge.setAuthSurface(active);
+          }
+
+          if (!window.__paywallReaderAuthObserver) {
+            window.__paywallReaderAuthObserver = new MutationObserver(emitAuthSurface);
+            window.__paywallReaderAuthObserver.observe(document.documentElement, {
+              childList: true,
+              subtree: true,
+              attributes: true
+            });
+          }
+
+          emitAuthSurface();
+          setTimeout(emitAuthSurface, 350);
+          setTimeout(emitAuthSurface, 1200);
+        })();
+        """.trimIndent(),
+        null,
+    )
+}
+
 private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: Long) {
     val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
     if (loadedUri.host != ARTICLE_READER_HOST && loadedUri.host != UNWALL_HOST) {
@@ -990,7 +1115,7 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
 private fun WebView.loadFallbackReaderIfPaywalled(loadedUrl: String?, delayMillis: Long) {
     val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
     val loadedHost = loadedUri.host ?: return
-    if (loadedHost !in ALLOWED_READER_HOSTS && loadedHost !in PAYWALL_FALLBACK_HOSTS) {
+    if (loadedHost !in ALLOWED_READER_HOSTS && !loadedUri.isPaywallFallbackHost()) {
         return
     }
 
@@ -1005,7 +1130,14 @@ private fun WebView.loadFallbackReaderIfPaywalled(loadedUrl: String?, delayMilli
                     'start your free trial and plug in',
                     'subscribe to continue',
                     'sign in to continue reading',
-                    'already a subscriber?'
+                    'already a subscriber?',
+                    'member-only story',
+                    'become a medium member',
+                    'get unlimited access to every story',
+                    'upgrade to continue reading',
+                    'this post is for paid subscribers',
+                    'this post is only for paid subscribers',
+                    'subscribe to keep reading'
                   ].some(function(marker) { return text.indexOf(marker) !== -1; });
                 })();
                 """.trimIndent(),
@@ -1138,7 +1270,7 @@ private fun ReaderError(
     }
 }
 
-private fun WebView.configureReaderSettings() {
+private fun WebView.configureReaderSettings(useBrowserUserAgent: Boolean = false) {
     CookieManager.getInstance().apply {
         setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -1147,6 +1279,11 @@ private fun WebView.configureReaderSettings() {
     }
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
+    if (useBrowserUserAgent) {
+        settings.userAgentString = settings.userAgentString
+            .replace("; wv", "")
+            .replace(" Version/4.0", "")
+    }
     settings.loadsImagesAutomatically = true
     settings.allowFileAccess = false
     settings.allowContentAccess = false
