@@ -66,10 +66,10 @@ fun AppNavigation() {
         directive = listDetailDirective,
         paneExpansionState = listDetailPaneExpansionState,
     )
-    var hasOpenReader by rememberSaveable { mutableStateOf(false) }
+    var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
     val closeReader = {
         backStack.removeLastOrNull()
-        hasOpenReader = backStack.any { it is AppRoute.Reader }
+        openReaderUrl = backStack.filterIsInstance<AppRoute.Reader>().lastOrNull()?.url
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -92,9 +92,10 @@ fun AppNavigation() {
                     ),
                 ) {
                     HomeRoute(
-                        showAddSourceFab = !isMultiPaneWidth || !hasOpenReader,
+                        selectedSourceUrl = openReaderUrl,
+                        showAddSourceFab = !isMultiPaneWidth || openReaderUrl == null,
                         onSourceClick = { source ->
-                            hasOpenReader = true
+                            openReaderUrl = source.url
                             backStack.add(AppRoute.Reader(source.url, source.name))
                         },
                     )

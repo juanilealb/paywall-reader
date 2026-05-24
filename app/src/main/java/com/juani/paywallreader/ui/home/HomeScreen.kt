@@ -97,6 +97,7 @@ import kotlinx.coroutines.launch
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
     modifier: Modifier = Modifier,
+    selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
@@ -134,6 +135,7 @@ fun HomeRoute(
         onMarkRead = viewModel::markRead,
         onClearHistory = viewModel::clearHistory,
         existingUrls = uiState.sources.map { it.url }.toSet(),
+        selectedSourceUrl = selectedSourceUrl,
         showAddSourceFab = showAddSourceFab,
         modifier = modifier,
     )
@@ -159,6 +161,7 @@ fun HomeScreen(
     onMarkRead: (String) -> Unit,
     onClearHistory: () -> Unit,
     existingUrls: Set<String>,
+    selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
@@ -325,6 +328,7 @@ fun HomeScreen(
                                     },
                                     onDelete = onDeleteSource,
                                     deleteLabel = stringResource(R.string.delete),
+                                    selected = source.url == selectedSourceUrl,
                                 )
                             }
                         }

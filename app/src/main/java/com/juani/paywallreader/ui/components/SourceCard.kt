@@ -61,6 +61,7 @@ fun SourceCard(
     onDelete: (Source) -> Unit,
     deleteLabel: String,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -88,14 +89,25 @@ fun SourceCard(
                     },
                 ),
             shape = RoundedCornerShape(16.dp),
-            color = if (source.isDefault) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
+            color = when {
+                selected -> MaterialTheme.colorScheme.primaryContainer
+                source.isDefault -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
             },
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 1.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            contentColor = if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            tonalElevation = if (selected) 3.dp else 1.dp,
+            border = BorderStroke(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
+            ),
         ) {
             Row(
                 modifier = Modifier
@@ -123,7 +135,11 @@ fun SourceCard(
                     Text(
                         text = host,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
