@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -158,6 +159,7 @@ fun HomeScreen(
     var addSourceInitialFolder by rememberSaveable { mutableStateOf("News") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
+    var readLaterFilter by rememberSaveable { mutableStateOf(ReadLaterFilter.All) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
@@ -177,13 +179,17 @@ fun HomeScreen(
             }
             .toList()
     }
-    val visibleReadingItems = remember(uiState.readingItems, normalizedSearch) {
-        uiState.readingItems.filter { item ->
-            normalizedSearch.isBlank() ||
-                item.title.contains(normalizedSearch, ignoreCase = true) ||
-                item.sourceName.contains(normalizedSearch, ignoreCase = true) ||
-                item.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
-        }
+    val visibleReadingItems = remember(uiState.readingItems, normalizedSearch, readLaterFilter) {
+        uiState.readingItems
+            .asSequence()
+            .filter { item -> readLaterFilter.matches(item) }
+            .filter { item ->
+                normalizedSearch.isBlank() ||
+                    item.title.contains(normalizedSearch, ignoreCase = true) ||
+                    item.sourceName.contains(normalizedSearch, ignoreCase = true) ||
+                    item.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
+            }
+            .toList()
     }
     val visibleHistoryItems = remember(uiState.historyItems, normalizedSearch) {
         uiState.historyItems.filter { item ->
@@ -312,18 +318,45 @@ fun HomeScreen(
                     }
 
                     HomeSection.ReadLater -> {
+                        if (uiState.readingItems.isNotEmpty()) {
+                            item {
+                                ReadLaterFilterChips(
+                                    selectedFilter = readLaterFilter,
+                                    onFilterSelected = { readLaterFilter = it },
+                                )
+                            }
+                        }
+
                         if (visibleReadingItems.isEmpty()) {
                             item {
                                 EmptyState(
-                                    icon = Icons.Rounded.Bookmark,
-                                    title = stringResource(R.string.empty_read_later),
-                                    body = stringResource(R.string.empty_read_later_subtitle),
+                                    icon = if (uiState.readingItems.isEmpty()) {
+                                        Icons.Rounded.Bookmark
+                                    } else {
+                                        Icons.Rounded.Search
+                                    },
+                                    title = if (uiState.readingItems.isEmpty()) {
+                                        stringResource(R.string.empty_read_later)
+                                    } else {
+                                        stringResource(R.string.empty_search_title)
+                                    },
+                                    body = if (uiState.readingItems.isEmpty()) {
+                                        stringResource(R.string.empty_read_later_subtitle)
+                                    } else {
+                                        stringResource(R.string.empty_search_subtitle)
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = layoutSpec.emptyStateTopPadding),
                                 )
                             }
                         } else {
+                            item {
+                                SectionHeader(
+                                    title = stringResource(R.string.latest_saved),
+                                    count = 1,
+                                )
+                            }
                             item {
                                 ReadLaterHero(
                                     item = visibleReadingItems.first(),
@@ -423,6 +456,9 @@ fun HomeScreen(
                     selectedSection = selectedSection,
                     onSectionSelected = {
                         selectedSection = it
+                        if (it != HomeSection.ReadLater) {
+                            readLaterFilter = ReadLaterFilter.All
+                        }
                         searchQuery = ""
                     },
                     readingCount = uiState.readingItems.size,
@@ -518,6 +554,19 @@ private enum class HomeSection(
         }
 }
 
+private enum class ReadLaterFilter(
+    val label: String,
+) {
+    All("Todo"),
+    Today("De hoy");
+
+    fun matches(item: ReadingItem): Boolean =
+        when (this) {
+            All -> true
+            Today -> item.addedAt >= Calendar.getInstance().startOfDayMillis()
+        }
+}
+
 @Composable
 private fun SectionSelector(
     selectedSection: HomeSection,
@@ -584,6 +633,26 @@ private fun SectionSelector(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReadLaterFilterChips(
+    selectedFilter: ReadLaterFilter,
+    onFilterSelected: (ReadLaterFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(items = ReadLaterFilter.entries.toList(), key = { it.name }) { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label) },
+            )
         }
     }
 }
@@ -787,6 +856,23 @@ private fun ReadLaterHero(
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Schedule,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                )
+                Text(
+                    text = item.addedAt.toRelativeTimeLabel(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -876,11 +962,22 @@ private fun ReadingListItem(
             BrowserFavicon(url = item.url, fallbackText = item.title)
         },
         trailingContent = {
-            IconButton(onClick = onMarkRead) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = stringResource(R.string.mark_read),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = item.addedAt.toRelativeTimeLabel(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
+                IconButton(onClick = onMarkRead) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = stringResource(R.string.mark_read),
+                    )
+                }
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
