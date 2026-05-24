@@ -6,6 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,10 +21,8 @@ import android.graphics.BitmapFactory
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,10 +74,10 @@ fun SourceCard(
     val host = remember(source.url) { source.url.toDisplayHost() }
 
     Box(modifier = modifier) {
-        ElevatedCard(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(52.dp)
                 .scale(cardScale)
                 .combinedClickable(
                     interactionSource = interactionSource,
@@ -88,31 +87,35 @@ fun SourceCard(
                         if (!source.isDefault) menuExpanded = true
                     },
                 ),
-            shape = MaterialTheme.shapes.small,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = if (source.isDefault) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                },
-            ),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = if (source.isDefault) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 1.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 10.dp, top = 6.dp, end = 2.dp, bottom = 6.dp),
+                    .padding(start = 10.dp, top = 5.dp, end = 2.dp, bottom = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BrowserFavicon(url = source.url, fallbackText = source.name)
+                BrowserFavicon(
+                    url = source.url,
+                    fallbackText = source.name,
+                    modifier = Modifier.size(32.dp),
+                )
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     Text(
                         text = source.name,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -125,7 +128,10 @@ fun SourceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(onClick = { menuExpanded = true }) {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = stringResource(R.string.source_options),

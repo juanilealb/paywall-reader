@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -163,6 +164,7 @@ fun HomeScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     val folders = remember(uiState.sources) {
         uiState.sources.map { it.folderName }.distinct().sorted()
@@ -309,7 +311,10 @@ fun HomeScreen(
                             ) { source ->
                                 SourceCard(
                                     source = source,
-                                    onClick = onSourceClick,
+                                    onClick = {
+                                        focusManager.clearFocus()
+                                        onSourceClick(it)
+                                    },
                                     onDelete = onDeleteSource,
                                     deleteLabel = stringResource(R.string.delete),
                                 )
@@ -360,7 +365,10 @@ fun HomeScreen(
                             item {
                                 ReadLaterHero(
                                     item = visibleReadingItems.first(),
-                                    onClick = { onReadingItemClick(visibleReadingItems.first()) },
+                                    onClick = {
+                                        focusManager.clearFocus()
+                                        onReadingItemClick(visibleReadingItems.first())
+                                    },
                                     onMarkRead = { onMarkRead(visibleReadingItems.first().url) },
                                 )
                             }
@@ -375,7 +383,10 @@ fun HomeScreen(
                                 item {
                                     ReadingListGroup(
                                         items = rest,
-                                        onItemClick = onReadingItemClick,
+                                        onItemClick = {
+                                            focusManager.clearFocus()
+                                            onReadingItemClick(it)
+                                        },
                                         onMarkRead = { item -> onMarkRead(item.url) },
                                     )
                                 }
@@ -406,7 +417,10 @@ fun HomeScreen(
                                 item(key = "history-group-${group.title}") {
                                     HistoryListGroup(
                                         items = group.items,
-                                        onItemClick = onHistoryItemClick,
+                                        onItemClick = {
+                                            focusManager.clearFocus()
+                                            onHistoryItemClick(it)
+                                        },
                                     )
                                 }
                             }
@@ -418,6 +432,7 @@ fun HomeScreen(
             if (selectedSection == HomeSection.Sources) {
                 FloatingActionButton(
                     onClick = {
+                        focusManager.clearFocus()
                         coroutineScope.launch {
                             val clipboardText = clipboard
                                 .getClipEntry()
@@ -455,6 +470,7 @@ fun HomeScreen(
                 SectionSelector(
                     selectedSection = selectedSection,
                     onSectionSelected = {
+                        focusManager.clearFocus()
                         selectedSection = it
                         if (it != HomeSection.ReadLater) {
                             readLaterFilter = ReadLaterFilter.All
