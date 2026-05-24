@@ -2,10 +2,12 @@ package com.juani.paywallreader.ui.home
 
 import android.app.Application
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +37,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -77,6 +80,7 @@ import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
+import java.util.Calendar
 import kotlinx.coroutines.launch
 
 @Composable
@@ -182,6 +186,9 @@ fun HomeScreen(
                 item.url.toDisplayHost().contains(normalizedSearch, ignoreCase = true)
         }
     }
+    val visibleHistoryGroups = remember(visibleHistoryItems) {
+        visibleHistoryItems.take(30).groupByVisitBucket()
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -194,6 +201,11 @@ fun HomeScreen(
         ) {
             val layoutSpec = rememberHomeLayoutSpec(maxWidth)
             val compactHeader = maxWidth < 480.dp
+            val showSearch = when (selectedSection) {
+                HomeSection.Sources -> true
+                HomeSection.ReadLater -> uiState.readingItems.isNotEmpty()
+                HomeSection.History -> uiState.historyItems.isNotEmpty()
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -213,12 +225,14 @@ fun HomeScreen(
                     )
                 }
 
-                item {
-                    SearchPill(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = selectedSection.searchPlaceholder,
-                    )
+                if (showSearch) {
+                    item {
+                        SearchPill(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = selectedSection.searchPlaceholder,
+                        )
+                    }
                 }
 
                 when (selectedSection) {
@@ -305,14 +319,11 @@ fun HomeScreen(
                                         count = rest.size,
                                     )
                                 }
-                                items(
-                                    items = rest,
-                                    key = { "read-${it.id}" },
-                                ) { item ->
-                                    ReadingListItem(
-                                        item = item,
-                                        onClick = { onReadingItemClick(item) },
-                                        onMarkRead = { onMarkRead(item.url) },
+                                item {
+                                    ReadingListGroup(
+                                        items = rest,
+                                        onItemClick = onReadingItemClick,
+                                        onMarkRead = { item -> onMarkRead(item.url) },
                                     )
                                 }
                             }
@@ -332,50 +343,51 @@ fun HomeScreen(
                                 )
                             }
                         } else {
-                            item {
-                                SectionHeader(
-                                    title = stringResource(R.string.history_recent),
-                                    count = visibleHistoryItems.size,
-                                )
-                            }
-                            items(
-                                items = visibleHistoryItems.take(30),
-                                key = { "history-${it.id}" },
-                            ) { item ->
-                                HistoryListItem(
-                                    item = item,
-                                    onClick = { onHistoryItemClick(item) },
-                                )
+                            visibleHistoryGroups.forEach { group ->
+                                item(key = "history-header-${group.title}") {
+                                    SectionHeader(
+                                        title = group.title,
+                                        count = group.items.size,
+                                    )
+                                }
+                                item(key = "history-group-${group.title}") {
+                                    HistoryListGroup(
+                                        items = group.items,
+                                        onItemClick = onHistoryItemClick,
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            FloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        val clipboardText = clipboard
-                            .getClipEntry()
-                            ?.clipData
-                            ?.takeIf { it.itemCount > 0 }
-                            ?.getItemAt(0)
-                            ?.coerceToText(context)
-                            ?.toString()
-                        addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
-                        showAddSourceSheet = true
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(end = layoutSpec.horizontalPadding, bottom = 82.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.add_source),
-                )
+            if (selectedSection == HomeSection.Sources) {
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            val clipboardText = clipboard
+                                .getClipEntry()
+                                ?.clipData
+                                ?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)
+                                ?.coerceToText(context)
+                                ?.toString()
+                            addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
+                            showAddSourceSheet = true
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(end = layoutSpec.horizontalPadding, bottom = 82.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.add_source),
+                    )
+                }
             }
 
             Surface(
@@ -734,43 +746,102 @@ private fun ReadLaterHero(
 }
 
 @Composable
+private fun ReadingListGroup(
+    items: List<ReadingItem>,
+    onItemClick: (ReadingItem) -> Unit,
+    onMarkRead: (ReadingItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GroupedListSurface(modifier = modifier) {
+        items.forEachIndexed { index, item ->
+            ReadingListItem(
+                item = item,
+                onClick = { onItemClick(item) },
+                onMarkRead = { onMarkRead(item) },
+            )
+            if (index < items.lastIndex) {
+                GroupDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryListGroup(
+    items: List<HistoryItem>,
+    onItemClick: (HistoryItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GroupedListSurface(modifier = modifier) {
+        items.forEachIndexed { index, item ->
+            HistoryListItem(
+                item = item,
+                onClick = { onItemClick(item) },
+            )
+            if (index < items.lastIndex) {
+                GroupDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupedListSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun GroupDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 62.dp, end = 14.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+@Composable
 private fun ReadingListItem(
     item: ReadingItem,
     onClick: () -> Unit,
     onMarkRead: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            },
-            supportingContent = {
-                Text(
-                    text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+    ListItem(
+        headlineContent = {
+            Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = {
+            Text(
+                text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingContent = {
+            BrowserFavicon(url = item.url, fallbackText = item.title)
+        },
+        trailingContent = {
+            IconButton(onClick = onMarkRead) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = stringResource(R.string.mark_read),
                 )
-            },
-            leadingContent = {
-                BrowserFavicon(url = item.url, fallbackText = item.title)
-            },
-            trailingContent = {
-                IconButton(onClick = onMarkRead) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = stringResource(R.string.mark_read),
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
-    }
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    )
 }
 
 @Composable
@@ -779,29 +850,29 @@ private fun HistoryListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
-            supportingContent = {
-                Text(
-                    text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            leadingContent = {
-                BrowserFavicon(url = item.url, fallbackText = item.title)
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
-    }
+    ListItem(
+        headlineContent = {
+            Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = {
+            Text(
+                text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingContent = {
+            BrowserFavicon(
+                url = item.url,
+                fallbackText = item.title,
+                modifier = Modifier.size(32.dp),
+            )
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    )
 }
 
 private data class HomeLayoutSpec(
@@ -811,6 +882,32 @@ private data class HomeLayoutSpec(
     val itemSpacing: Dp,
     val emptyStateTopPadding: Dp,
 )
+
+private data class HistoryGroup(
+    val title: String,
+    val items: List<HistoryItem>,
+)
+
+private fun List<HistoryItem>.groupByVisitBucket(): List<HistoryGroup> {
+    val todayStart = Calendar.getInstance().startOfDayMillis()
+    val yesterdayStart = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -1)
+    }.startOfDayMillis()
+
+    return listOf(
+        HistoryGroup("Hoy", filter { it.visitedAt >= todayStart }),
+        HistoryGroup("Ayer", filter { it.visitedAt in yesterdayStart until todayStart }),
+        HistoryGroup("Anteriores", filter { it.visitedAt < yesterdayStart }),
+    ).filter { it.items.isNotEmpty() }
+}
+
+private fun Calendar.startOfDayMillis(): Long =
+    apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
 private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
     when {
