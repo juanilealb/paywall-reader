@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -75,6 +76,9 @@ import com.juani.paywallreader.R
 import java.io.ByteArrayInputStream
 
 private val FoldFloatingActionButtonSize = 64.dp
+private val ReaderToolbarHeight = 76.dp
+private val ReaderToolbarActionSize = 48.dp
+private val ReaderToolbarIconSize = 22.dp
 
 @Composable
 fun ReaderRoute(
@@ -421,7 +425,7 @@ private fun ReaderFloatingToolbar(
             },
             modifier = modifier,
             colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
             floatingActionButtonPosition = FloatingToolbarVerticalFabPosition.Bottom,
         ) {
             ReaderToolbarActions(
@@ -453,9 +457,9 @@ private fun ReaderFloatingToolbar(
                     onClick = onRefreshOrStop,
                 )
             },
-            modifier = modifier,
+            modifier = modifier.height(ReaderToolbarHeight),
             colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
         ) {
             ReaderToolbarActions(
@@ -532,93 +536,93 @@ private fun ReaderToolbarActions(
     archiveMode: Boolean,
 ) {
     if (showBackButton) {
-        IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onBack, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.reader_back),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
     }
     IconButton(
         onClick = onNavigateBack,
         enabled = canNavigateBack,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(ReaderToolbarActionSize),
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
             contentDescription = stringResource(R.string.reader_web_back),
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(ReaderToolbarIconSize),
         )
     }
     IconButton(
         onClick = onNavigateForward,
         enabled = canNavigateForward,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(ReaderToolbarActionSize),
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
             contentDescription = stringResource(R.string.reader_web_forward),
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(ReaderToolbarIconSize),
         )
     }
     if (showOpenOriginal) {
-        IconButton(onClick = onOpenOriginal, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onOpenOriginal, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.Rounded.OpenInBrowser,
                 contentDescription = stringResource(R.string.reader_open_original),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
     }
     if (!archiveMode) {
-        IconButton(onClick = onSaveForLater, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onSaveForLater, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.Rounded.Bookmark,
                 contentDescription = stringResource(R.string.reader_save_later),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
-        IconButton(onClick = onOpenReader, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onOpenReader, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.Article,
                 contentDescription = stringResource(R.string.reader_open_reader),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
         if (showClosePageAction) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.size(ReaderToolbarActionSize)) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = stringResource(R.string.reader_close_page),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(ReaderToolbarIconSize),
                 )
             }
         } else {
-            IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onMarkRead, modifier = Modifier.size(ReaderToolbarActionSize)) {
                 Icon(
                     imageVector = Icons.Rounded.Check,
                     contentDescription = stringResource(R.string.reader_mark_read),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(ReaderToolbarIconSize),
                 )
             }
         }
     }
     if (showShareAction) {
-        IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onShare, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.Rounded.Share,
                 contentDescription = stringResource(R.string.reader_share),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
     }
     if (showCollapseAction) {
-        IconButton(onClick = onCollapse, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onCollapse, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
                 imageVector = Icons.Rounded.KeyboardArrowDown,
                 contentDescription = stringResource(R.string.reader_collapse_toolbar),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
     }
