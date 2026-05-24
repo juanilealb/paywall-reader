@@ -34,6 +34,8 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -59,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -126,6 +129,7 @@ fun ReaderScreen(
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim()
     }
+    var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl })))
     }
@@ -174,8 +178,8 @@ fun ReaderScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         val useVerticalToolbar = !showBackButton || maxWidth >= 420.dp
-        val toolbarAlignment = if (maxWidth >= 600.dp || useVerticalToolbar) {
-            Alignment.CenterEnd
+        val toolbarAlignment = if (useVerticalToolbar) {
+            Alignment.BottomEnd
         } else {
             Alignment.BottomCenter
         }
@@ -337,7 +341,9 @@ fun ReaderScreen(
                 canNavigateForward = canNavigateForward,
                 isLoading = isLoading,
                 vertical = useVerticalToolbar,
+                expanded = if (useVerticalToolbar) toolbarExpanded else true,
                 showShareAction = showShareAction && !useVerticalToolbar,
+                onExpandedChange = { toolbarExpanded = it },
                 onBack = onBack,
                 onNavigateBack = {
                     webView?.goBack()
@@ -367,7 +373,10 @@ fun ReaderScreen(
                     .then(
                         if (useVerticalToolbar) {
                             Modifier
-                                .offset(x = -FloatingToolbarDefaults.ScreenOffset)
+                                .offset(
+                                    x = -FloatingToolbarDefaults.ScreenOffset,
+                                    y = -FloatingToolbarDefaults.ScreenOffset,
+                                )
                                 .padding(WindowInsets.safeDrawing.asPaddingValues())
                                 .zIndex(1f)
                         } else {
@@ -390,7 +399,9 @@ private fun ReaderFloatingToolbar(
     canNavigateForward: Boolean,
     isLoading: Boolean,
     vertical: Boolean,
+    expanded: Boolean,
     showShareAction: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
@@ -406,11 +417,18 @@ private fun ReaderFloatingToolbar(
 ) {
     if (vertical) {
         VerticalFloatingToolbar(
-            expanded = true,
+            expanded = expanded,
             floatingActionButton = {
                 ReaderRefreshFab(
                     isLoading = isLoading,
-                    onClick = onRefreshOrStop,
+                    collapsed = !expanded,
+                    onClick = {
+                        if (expanded) {
+                            onRefreshOrStop()
+                        } else {
+                            onExpandedChange(true)
+                        }
+                    },
                 )
             },
             modifier = modifier,
@@ -424,6 +442,7 @@ private fun ReaderFloatingToolbar(
                 canNavigateForward = canNavigateForward,
                 showShareAction = false,
                 showOpenOriginal = false,
+                showCollapseAction = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -433,6 +452,7 @@ private fun ReaderFloatingToolbar(
                 onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
+                onCollapse = { onExpandedChange(false) },
                 archiveMode = archiveMode,
             )
         }
@@ -456,6 +476,7 @@ private fun ReaderFloatingToolbar(
                 canNavigateForward = canNavigateForward,
                 showShareAction = showShareAction,
                 showOpenOriginal = true,
+                showCollapseAction = false,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
@@ -465,6 +486,7 @@ private fun ReaderFloatingToolbar(
                 onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
+                onCollapse = {},
                 archiveMode = archiveMode,
             )
         }
@@ -475,13 +497,22 @@ private fun ReaderFloatingToolbar(
 @Composable
 private fun ReaderRefreshFab(
     isLoading: Boolean,
+    collapsed: Boolean = false,
     onClick: () -> Unit,
 ) {
     FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
         Icon(
-            imageVector = if (isLoading) Icons.Rounded.Close else Icons.Rounded.Refresh,
+            imageVector = when {
+                collapsed -> Icons.Rounded.KeyboardArrowUp
+                isLoading -> Icons.Rounded.Close
+                else -> Icons.Rounded.Refresh
+            },
             contentDescription = stringResource(
-                if (isLoading) R.string.reader_stop_loading else R.string.reader_refresh,
+                when {
+                    collapsed -> R.string.reader_expand_toolbar
+                    isLoading -> R.string.reader_stop_loading
+                    else -> R.string.reader_refresh
+                },
             ),
         )
     }
@@ -494,6 +525,7 @@ private fun ReaderToolbarActions(
     canNavigateForward: Boolean,
     showShareAction: Boolean,
     showOpenOriginal: Boolean,
+    showCollapseAction: Boolean,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
@@ -503,6 +535,7 @@ private fun ReaderToolbarActions(
     onOpenArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
+    onCollapse: () -> Unit,
     archiveMode: Boolean,
 ) {
     if (showBackButton) {
@@ -580,6 +613,15 @@ private fun ReaderToolbarActions(
             Icon(
                 imageVector = Icons.Rounded.Share,
                 contentDescription = stringResource(R.string.reader_share),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    if (showCollapseAction) {
+        IconButton(onClick = onCollapse, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.reader_collapse_toolbar),
                 modifier = Modifier.size(20.dp),
             )
         }

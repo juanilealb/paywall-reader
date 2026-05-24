@@ -54,6 +54,8 @@
     <string name="reader_open_archive">Buscar en archive.ph</string>
     <string name="reader_mark_read">Leído</string>
     <string name="reader_share">Compartir</string>
+    <string name="reader_expand_toolbar">Mostrar acciones</string>
+    <string name="reader_collapse_toolbar">Ocultar acciones</string>
     <string name="reader_back">Volver</string>
     <string name="empty_sources">No tenés fuentes todavía</string>
     <string name="empty_sources_subtitle">Tocá + para agregar un diario o portal</string>
