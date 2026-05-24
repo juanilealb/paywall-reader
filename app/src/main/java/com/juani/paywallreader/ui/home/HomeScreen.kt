@@ -149,6 +149,7 @@ fun HomeScreen(
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
+    var addSourceInitialFolder by rememberSaveable { mutableStateOf("News") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -245,6 +246,7 @@ fun HomeScreen(
                                     onFolderSelected = { selectedFolder = it },
                                     onNewFolder = {
                                         addSourceInitialUrl = ""
+                                        addSourceInitialFolder = ""
                                         showAddSourceSheet = true
                                     },
                                 )
@@ -374,6 +376,7 @@ fun HomeScreen(
                                 ?.coerceToText(context)
                                 ?.toString()
                             addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
+                            addSourceInitialFolder = selectedFolder ?: "News"
                             showAddSourceSheet = true
                         }
                     },
@@ -435,6 +438,8 @@ fun HomeScreen(
             onDismiss = { showAddSourceSheet = false },
             existingUrls = existingUrls,
             initialUrl = addSourceInitialUrl,
+            initialFolderName = addSourceInitialFolder,
+            existingFolders = folders,
         )
     }
 }

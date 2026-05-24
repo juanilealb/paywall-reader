@@ -9,6 +9,8 @@
     <string name="source_name">Nombre</string>
     <string name="source_url">URL</string>
     <string name="folder_name">Carpeta</string>
+    <string name="choose_folder">Elegir carpeta</string>
+    <string name="new_folder_hint">Escribí un nombre nuevo o elegí una existente.</string>
     <string name="source_preview">Se guardará como</string>
     <string name="invalid_url">Ingresá una URL válida</string>
     <string name="duplicate_source">Esa fuente ya está guardada</string>

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Title
 import androidx.compose.material.icons.rounded.Folder
@@ -31,7 +33,8 @@ import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,14 +61,20 @@ fun AddSourceSheet(
     modifier: Modifier = Modifier,
     existingUrls: Set<String> = emptySet(),
     initialUrl: String = "",
+    initialFolderName: String = "News",
+    existingFolders: List<String> = emptyList(),
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        SheetValue.Hidden,
+        setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
     val scope = rememberCoroutineScope()
     var isContentVisible by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf(initialUrl) }
-    var folderName by remember { mutableStateOf("News") }
+    var folderName by remember { mutableStateOf(initialFolderName) }
     var saveMenuExpanded by remember { mutableStateOf(false) }
+    var folderMenuExpanded by remember { mutableStateOf(false) }
     val validatedUrl = validateSourceUrl(url)
     val normalizedUrl = validatedUrl.normalizedUrl
     val isDuplicate = normalizedUrl in existingUrls
@@ -79,6 +88,7 @@ fun AddSourceSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        sheetMaxWidth = 520.dp,
         shape = MaterialTheme.shapes.extraLarge,
         modifier = modifier,
     ) {
@@ -149,7 +159,51 @@ fun AddSourceSheet(
                             contentDescription = null,
                         )
                     },
+                    trailingIcon = {
+                        if (existingFolders.isNotEmpty()) {
+                            Box {
+                                FilledIconButton(
+                                    onClick = { folderMenuExpanded = true },
+                                    modifier = Modifier.padding(end = 2.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDropDown,
+                                        contentDescription = stringResource(R.string.choose_folder),
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = folderMenuExpanded,
+                                    onDismissRequest = { folderMenuExpanded = false },
+                                ) {
+                                    existingFolders.forEach { folder ->
+                                        DropdownMenuItem(
+                                            text = { Text(folder) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (folder == folderName) {
+                                                        Icons.Rounded.Check
+                                                    } else {
+                                                        Icons.Rounded.Folder
+                                                    },
+                                                    contentDescription = null,
+                                                )
+                                            },
+                                            onClick = {
+                                                folderName = folder
+                                                folderMenuExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
                     singleLine = true,
+                    supportingText = {
+                        if (folderName.isBlank()) {
+                            Text(stringResource(R.string.new_folder_hint))
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
