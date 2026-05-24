@@ -322,6 +322,23 @@ fun HomeScreen(
                             }
                         }
 
+                        item {
+                            SectionHeader(
+                                title = selectedFolder ?: stringResource(R.string.all_sources),
+                                count = visibleSources.size,
+                                action = selectedFolder?.takeIf { it != UNFILED_FOLDER_NAME }?.let { folder ->
+                                    {
+                                        IconButton(onClick = { showDeleteFolderConfirmation = true }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Delete,
+                                                contentDescription = stringResource(R.string.delete_folder),
+                                            )
+                                        }
+                                    }
+                                },
+                            )
+                        }
+
                         if (visibleSources.isEmpty()) {
                             item {
                                 EmptyState(
@@ -342,22 +359,6 @@ fun HomeScreen(
                                 )
                             }
                         } else {
-                            item {
-                                SectionHeader(
-                                    title = selectedFolder ?: stringResource(R.string.all_sources),
-                                    count = visibleSources.size,
-                                    action = selectedFolder?.takeIf { it != UNFILED_FOLDER_NAME }?.let { folder ->
-                                        {
-                                            IconButton(onClick = { showDeleteFolderConfirmation = true }) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Delete,
-                                                    contentDescription = stringResource(R.string.delete_folder),
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                            }
                             items(
                                 items = visibleSources,
                                 key = { "source-${it.id}" },
