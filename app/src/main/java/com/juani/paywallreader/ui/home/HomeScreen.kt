@@ -35,6 +35,8 @@ import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -46,6 +48,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -459,34 +464,23 @@ fun HomeScreen(
                 }
             }
 
-            Surface(
+            SectionSelector(
+                selectedSection = selectedSection,
+                onSectionSelected = {
+                    focusManager.clearFocus()
+                    selectedSection = it
+                    if (it != HomeSection.ReadLater) {
+                        readLaterFilter = ReadLaterFilter.All
+                    }
+                    searchQuery = ""
+                },
+                readingCount = uiState.readingItems.size,
+                historyCount = uiState.historyItems.size,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding(),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                tonalElevation = 3.dp,
-            ) {
-                SectionSelector(
-                    selectedSection = selectedSection,
-                    onSectionSelected = {
-                        focusManager.clearFocus()
-                        selectedSection = it
-                        if (it != HomeSection.ReadLater) {
-                            readLaterFilter = ReadLaterFilter.All
-                        }
-                        searchQuery = ""
-                    },
-                    readingCount = uiState.readingItems.size,
-                    historyCount = uiState.historyItems.size,
-                    modifier = Modifier.padding(
-                        start = layoutSpec.horizontalPadding,
-                        top = 10.dp,
-                        end = layoutSpec.horizontalPadding,
-                        bottom = 10.dp,
-                    ),
-                )
-            }
+            )
         }
     }
 
@@ -591,9 +585,10 @@ private fun SectionSelector(
     historyCount: Int,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    NavigationBar(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 3.dp,
     ) {
         HomeSection.entries.forEach { section ->
             val selected = selectedSection == section
@@ -602,53 +597,40 @@ private fun SectionSelector(
                 HomeSection.ReadLater -> readingCount
                 HomeSection.History -> historyCount
             }
-            Surface(
+            NavigationBarItem(
+                selected = selected,
                 onClick = { onSectionSelected(section) },
-                modifier = Modifier.weight(1f),
-                shape = CircleShape,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerLow
-                },
-                contentColor = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                tonalElevation = if (selected) 2.dp else 0.dp,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                icon = {
+                    BadgedBox(
+                        badge = {
+                            if (count > 0) {
+                                Badge {
+                                    Text(count.coerceAtMost(99).toString())
+                                }
+                            }
+                        },
                     ) {
                         Icon(
                             imageVector = section.icon,
                             contentDescription = null,
-                            modifier = Modifier.size(19.dp),
-                        )
-                        Text(
-                            text = if (count > 0) {
-                                "${section.shortTitle} ${count.coerceAtMost(99)}"
-                            } else {
-                                section.shortTitle
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-            }
+                },
+                label = {
+                    Text(
+                        text = section.shortTitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
         }
     }
 }
