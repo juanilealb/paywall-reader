@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.juani.paywallreader"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.juani.paywallreader"
@@ -50,6 +50,7 @@ kotlin {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.05.01")
+    val material3ExpressiveVersion = "1.5.0-alpha20"
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
@@ -60,8 +61,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
 
     // Material 3
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3-window-size-class")
+    implementation("androidx.compose.material3:material3:$material3ExpressiveVersion")
+    implementation("androidx.compose.material3:material3-window-size-class:$material3ExpressiveVersion")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha09")
     implementation("androidx.compose.material:material-icons-extended")
 

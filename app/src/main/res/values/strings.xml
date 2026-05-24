@@ -22,6 +22,9 @@
     <string name="reader_error_message">Revisá la conexión o probá abrir la página original.</string>
     <string name="reader_retry">Reintentar</string>
     <string name="reader_refresh">Recargar</string>
+    <string name="reader_stop_loading">Detener carga</string>
+    <string name="reader_web_back">Página anterior</string>
+    <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
     <string name="reader_share">Compartir</string>
     <string name="reader_back">Volver</string>

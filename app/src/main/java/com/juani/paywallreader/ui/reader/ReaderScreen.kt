@@ -13,30 +13,38 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarHorizontalFabPosition
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.juani.paywallreader.R
@@ -70,7 +77,7 @@ fun ReaderRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ReaderScreen(
     sourceName: String,
@@ -84,6 +91,8 @@ fun ReaderScreen(
     var isLoading by remember { mutableStateOf(true) }
     var progress by remember { mutableStateOf(0) }
     var hasError by remember { mutableStateOf(false) }
+    var canNavigateBack by remember { mutableStateOf(false) }
+    var canNavigateForward by remember { mutableStateOf(false) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim()
     }
@@ -97,6 +106,10 @@ fun ReaderScreen(
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share)))
     }
+    fun updateNavigationState(view: WebView?) {
+        canNavigateBack = view?.canGoBack() == true
+        canNavigateForward = view?.canGoForward() == true
+    }
 
     BackHandler {
         val view = webView
@@ -107,59 +120,18 @@ fun ReaderScreen(
         }
     }
 
-    Scaffold(
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = sourceName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
-                navigationIcon = {
-                    if (showBackButton) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.reader_back),
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = openOriginal) {
-                        Icon(
-                            imageVector = Icons.Rounded.OpenInBrowser,
-                            contentDescription = stringResource(R.string.reader_open_original),
-                        )
-                    }
-                    IconButton(onClick = shareOriginal) {
-                        Icon(
-                            imageVector = Icons.Rounded.Share,
-                            contentDescription = stringResource(R.string.reader_share),
-                        )
-                    }
-                    IconButton(onClick = { webView?.reload() }) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = stringResource(R.string.reader_refresh),
-                        )
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
+    ) {
+        val toolbarAlignment = if (maxWidth >= 600.dp) {
+            Alignment.BottomEnd
+        } else {
+            Alignment.BottomCenter
+        }
+        val showShareAction = maxWidth >= 380.dp
+
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues),
+            modifier = Modifier.fillMaxSize(),
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -169,20 +141,31 @@ fun ReaderScreen(
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 progress = newProgress
+                                updateNavigationState(view)
                             }
                         }
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 isLoading = true
                                 hasError = false
+                                updateNavigationState(view)
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
+                                updateNavigationState(view)
                                 view?.applyAdCleanup()
                                 if (url?.isRemovePaywallsUrl() == true) {
                                     view?.applyReaderChrome()
                                 }
+                            }
+
+                            override fun doUpdateVisitedHistory(
+                                view: WebView?,
+                                url: String?,
+                                isReload: Boolean,
+                            ) {
+                                updateNavigationState(view)
                             }
 
                             override fun shouldOverrideUrlLoading(
@@ -220,6 +203,7 @@ fun ReaderScreen(
                                 if (request?.isForMainFrame == true) {
                                     isLoading = false
                                     hasError = true
+                                    updateNavigationState(view)
                                 }
                             }
 
@@ -241,6 +225,7 @@ fun ReaderScreen(
                 },
                 update = { view ->
                     webView = view
+                    updateNavigationState(view)
                     if (view.url == null) {
                         view.loadUrl(initialUrl)
                     }
@@ -253,7 +238,6 @@ fun ReaderScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(top = 0.dp),
                 )
             }
 
@@ -273,6 +257,116 @@ fun ReaderScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
+            }
+
+            ReaderFloatingToolbar(
+                showBackButton = showBackButton,
+                canNavigateBack = canNavigateBack,
+                canNavigateForward = canNavigateForward,
+                isLoading = isLoading,
+                showShareAction = showShareAction,
+                onBack = onBack,
+                onNavigateBack = {
+                    webView?.goBack()
+                    updateNavigationState(webView)
+                },
+                onNavigateForward = {
+                    webView?.goForward()
+                    updateNavigationState(webView)
+                },
+                onRefreshOrStop = {
+                    if (isLoading) {
+                        webView?.stopLoading()
+                        isLoading = false
+                    } else {
+                        webView?.reload()
+                    }
+                },
+                onOpenOriginal = openOriginal,
+                onShare = shareOriginal,
+                modifier = Modifier
+                    .align(toolbarAlignment)
+                    .padding(WindowInsets.safeDrawing.asPaddingValues())
+                    .padding(16.dp)
+                    .widthIn(max = 520.dp),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ReaderFloatingToolbar(
+    showBackButton: Boolean,
+    canNavigateBack: Boolean,
+    canNavigateForward: Boolean,
+    isLoading: Boolean,
+    showShareAction: Boolean,
+    onBack: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateForward: () -> Unit,
+    onRefreshOrStop: () -> Unit,
+    onOpenOriginal: () -> Unit,
+    onShare: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    HorizontalFloatingToolbar(
+        expanded = true,
+        floatingActionButton = {
+            FloatingToolbarDefaults.VibrantFloatingActionButton(
+                onClick = onRefreshOrStop,
+            ) {
+                Icon(
+                    imageVector = if (isLoading) Icons.Rounded.Close else Icons.Rounded.Refresh,
+                    contentDescription = stringResource(
+                        if (isLoading) R.string.reader_stop_loading else R.string.reader_refresh,
+                    ),
+                )
+            }
+        },
+        modifier = modifier,
+        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
+    ) {
+        if (showBackButton) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.reader_back),
+                )
+            }
+        }
+        IconButton(
+            onClick = onNavigateBack,
+            enabled = canNavigateBack,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = stringResource(R.string.reader_web_back),
+            )
+        }
+        IconButton(
+            onClick = onNavigateForward,
+            enabled = canNavigateForward,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = stringResource(R.string.reader_web_forward),
+            )
+        }
+        IconButton(onClick = onOpenOriginal) {
+            Icon(
+                imageVector = Icons.Rounded.OpenInBrowser,
+                contentDescription = stringResource(R.string.reader_open_original),
+            )
+        }
+        if (showShareAction) {
+            IconButton(onClick = onShare) {
+                Icon(
+                    imageVector = Icons.Rounded.Share,
+                    contentDescription = stringResource(R.string.reader_share),
+                )
             }
         }
     }
