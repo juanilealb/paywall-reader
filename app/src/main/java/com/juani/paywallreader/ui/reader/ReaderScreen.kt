@@ -14,6 +14,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -57,12 +58,14 @@ fun ReaderRoute(
     sourceName: String,
     sourceUrl: String,
     onBack: () -> Unit,
+    showBackButton: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     ReaderScreen(
         sourceName = sourceName,
         sourceUrl = sourceUrl,
         onBack = onBack,
+        showBackButton = showBackButton,
         modifier = modifier,
     )
 }
@@ -73,6 +76,7 @@ fun ReaderScreen(
     sourceName: String,
     sourceUrl: String,
     onBack: () -> Unit,
+    showBackButton: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -119,11 +123,13 @@ fun ReaderScreen(
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.reader_back),
-                        )
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.reader_back),
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -152,7 +158,8 @@ fun ReaderScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
+                .padding(paddingValues)
+                .consumeWindowInsets(paddingValues),
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),

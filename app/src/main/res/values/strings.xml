@@ -27,6 +27,8 @@
     <string name="reader_back">Volver</string>
     <string name="empty_sources">No tenés fuentes todavía</string>
     <string name="empty_sources_subtitle">Tocá + para agregar un diario o portal</string>
+    <string name="reader_placeholder_title">Elegí una fuente</string>
+    <string name="reader_placeholder_message">Tus webs guardadas quedan a la izquierda en pantallas grandes.</string>
     <string name="default_source_clarin">Clarín</string>
     <string name="default_source_lanacion">La Nación</string>
     <string name="default_source_infobae">Infobae</string>

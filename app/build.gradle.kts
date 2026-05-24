@@ -62,6 +62,7 @@ dependencies {
     // Material 3
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material3:material3-window-size-class")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha09")
     implementation("androidx.compose.material:material-icons-extended")
 
     // Compose UI + Tooling
@@ -86,6 +87,7 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
