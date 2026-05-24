@@ -4,6 +4,8 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalView
@@ -32,6 +34,8 @@ private val LightColorScheme = lightColorScheme(
     onSurface = PaperOnSurface,
     surfaceVariant = PaperSurfaceVariant,
     onSurfaceVariant = PaperOnSurfaceVariant,
+    surfaceContainer = PaperSurfaceContainer,
+    surfaceContainerHigh = PaperSurfaceContainerHigh,
     outline = PaperOutline,
 )
 
@@ -58,18 +62,21 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = NightOnSurface,
     surfaceVariant = NightSurfaceVariant,
     onSurfaceVariant = NightOnSurfaceVariant,
+    surfaceContainer = NightSurfaceContainer,
+    surfaceContainerHigh = NightSurfaceContainerHigh,
     outline = NightOnSurfaceVariant,
 )
 
 @Composable
 fun PaywallReaderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalView.current.context
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> DarkColorScheme
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> LightColorScheme
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(context)
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -85,6 +92,7 @@ fun PaywallReaderTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = PaywallReaderTypography,
+        shapes = PaywallReaderShapes,
         content = content,
     )
 }

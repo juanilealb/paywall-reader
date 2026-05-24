@@ -12,11 +12,14 @@ interface SourceDao {
     @Query("SELECT * FROM sources ORDER BY isDefault DESC, createdAt ASC")
     fun getAll(): Flow<List<SourceEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(source: SourceEntity): Long
 
     @Delete
     suspend fun delete(source: SourceEntity)
+
+    @Query("SELECT COUNT(*) FROM sources WHERE url = :url")
+    suspend fun countByUrl(url: String): Int
 
     @Query("SELECT COUNT(*) FROM sources")
     suspend fun count(): Int

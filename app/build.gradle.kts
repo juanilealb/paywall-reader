@@ -1,12 +1,14 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
 
 android {
     namespace = "com.juani.paywallreader"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.juani.paywallreader"
@@ -37,9 +39,6 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
-    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -69,8 +68,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.8.7")
+    // Navigation 3
+    implementation("androidx.navigation3:navigation3-runtime:1.0.0")
+    implementation("androidx.navigation3:navigation3-ui:1.0.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
 
     // Room
     val roomVersion = "2.6.1"

@@ -23,7 +23,7 @@ No es un navegador full. Es un **reader curado** con las páginas que a Juani le
 | Design | Material 3 (con motion y colores expresivos) |
 | Arquitectura | MVVM + StateFlow |
 | Persistencia | Room |
-| Navegación | Navigation Compose |
+| Navegación | Navigation 3 |
 | Contenido | WebView + removepaywalls.com |
 
 ## Funcionalidad MVP
@@ -66,14 +66,13 @@ com.juani.paywallreader/
 │   │   ├── HomeScreen.kt
 │   │   └── HomeViewModel.kt
 │   ├── reader/
-│   │   ├── ReaderScreen.kt
-│   │   └── ReaderViewModel.kt
+│   │   └── ReaderScreen.kt
 │   ├── components/
 │   │   ├── SourceCard.kt    // card de source con icono
 │   │   ├── AddSourceSheet.kt
 │   │   └── AnimatedEntrance.kt
 │   └── navigation/
-│       └── AppNavigation.kt // NavHost con transitions
+│       └── AppNavigation.kt // NavDisplay con NavKey tipado
 ├── MainActivity.kt
 └── PaywallReaderApp.kt      // Application class
 ```

@@ -8,7 +8,9 @@ val PaywallReaderTypography = Typography().let { base ->
         displayLarge = base.displayLarge.copy(fontWeight = FontWeight.Bold),
         headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.Bold),
         headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
         titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium),
         titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
     )
 }

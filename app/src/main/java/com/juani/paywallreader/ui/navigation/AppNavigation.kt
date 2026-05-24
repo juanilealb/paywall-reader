@@ -1,78 +1,95 @@
 package com.juani.paywallreader.ui.navigation
 
-import android.net.Uri
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import com.juani.paywallreader.domain.model.Source
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import com.juani.paywallreader.ui.home.HomeRoute
 import com.juani.paywallreader.ui.reader.ReaderRoute
+import com.juani.paywallreader.ui.theme.PaywallReaderMotion
+import kotlinx.serialization.Serializable
 
 @Composable
 fun AppNavigation() {
-    val navController = rememberNavController()
+    val backStack = rememberNavBackStack(AppRoute.Home)
 
-    NavHost(
-        navController = navController,
-        startDestination = AppRoute.Home.route,
-        enterTransition = { forwardEnterTransition() },
-        exitTransition = { forwardExitTransition() },
-        popEnterTransition = { backwardEnterTransition() },
-        popExitTransition = { backwardExitTransition() },
-    ) {
-        composable(AppRoute.Home.route) {
-            HomeRoute(
-                onSourceClick = { source ->
-                    navController.navigate(AppRoute.Reader.createRoute(source))
-                },
-            )
-        }
-        composable(
-            route = AppRoute.Reader.route,
-            arguments = listOf(
-                navArgument("url") { type = NavType.StringType },
-                navArgument("name") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                },
-            ),
-        ) {
-            ReaderRoute(
-                onBack = { navController.popBackStack() },
-            )
-        }
-    }
+    NavDisplay(
+        backStack = backStack,
+        onBack = { backStack.removeLastOrNull() },
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),
+        ),
+        entryProvider = entryProvider {
+            entry<AppRoute.Home> {
+                HomeRoute(
+                    onSourceClick = { source ->
+                        backStack.add(AppRoute.Reader(source.url, source.name))
+                    },
+                )
+            }
+            entry<AppRoute.Reader> { route ->
+                ReaderRoute(
+                    sourceName = route.name.ifBlank { route.url },
+                    sourceUrl = route.url,
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+        },
+        transitionSpec = {
+            forwardEnterTransition() togetherWith forwardExitTransition()
+        },
+        popTransitionSpec = {
+            backwardEnterTransition() togetherWith backwardExitTransition()
+        },
+        predictivePopTransitionSpec = {
+            backwardEnterTransition() togetherWith backwardExitTransition()
+        },
+    )
 }
 
-private sealed class AppRoute(val route: String) {
-    data object Home : AppRoute("home")
+@Serializable
+private sealed interface AppRoute : NavKey {
+    @Serializable
+    data object Home : AppRoute
 
-    data object Reader : AppRoute("reader/{url}?name={name}") {
-        fun createRoute(source: Source): String {
-            val encodedUrl = Uri.encode(source.url)
-            val encodedName = Uri.encode(source.name)
-            return "reader/$encodedUrl?name=$encodedName"
-        }
-    }
+    @Serializable
+    data class Reader(
+        val url: String,
+        val name: String,
+    ) : AppRoute
 }
 
 private fun forwardEnterTransition(): EnterTransition =
-    slideInHorizontally(initialOffsetX = { it }) + fadeIn()
+    slideInHorizontally(
+        animationSpec = PaywallReaderMotion.emphasizedOffsetSpring,
+        initialOffsetX = { it / 4 },
+    ) + fadeIn(animationSpec = PaywallReaderMotion.standardTween)
 
 private fun forwardExitTransition(): ExitTransition =
-    slideOutHorizontally(targetOffsetX = { -it / 3 }) + fadeOut()
+    slideOutHorizontally(
+        animationSpec = PaywallReaderMotion.emphasizedOffsetSpring,
+        targetOffsetX = { -it / 8 },
+    ) + fadeOut(animationSpec = PaywallReaderMotion.standardTween)
 
 private fun backwardEnterTransition(): EnterTransition =
-    slideInHorizontally(initialOffsetX = { -it / 3 }) + fadeIn()
+    slideInHorizontally(
+        animationSpec = PaywallReaderMotion.emphasizedOffsetSpring,
+        initialOffsetX = { -it / 8 },
+    ) + fadeIn(animationSpec = PaywallReaderMotion.standardTween)
 
 private fun backwardExitTransition(): ExitTransition =
-    slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+    slideOutHorizontally(
+        animationSpec = PaywallReaderMotion.emphasizedOffsetSpring,
+        targetOffsetX = { it / 4 },
+    ) + fadeOut(animationSpec = PaywallReaderMotion.standardTween)

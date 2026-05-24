@@ -3,6 +3,7 @@ package com.juani.paywallreader.data.repository
 import com.juani.paywallreader.data.local.SourceDao
 import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.domain.model.Source
+import com.juani.paywallreader.domain.model.validateSourceUrl
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -14,10 +15,15 @@ class SourceRepository(
     }
 
     suspend fun addSource(name: String, url: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (name.isBlank() || !validatedUrl.isValid || sourceDao.countByUrl(validatedUrl.normalizedUrl) > 0) {
+            return
+        }
+
         sourceDao.insert(
             SourceEntity(
                 name = name.trim(),
-                url = url.trim(),
+                url = validatedUrl.normalizedUrl,
                 isDefault = false,
             ),
         )
