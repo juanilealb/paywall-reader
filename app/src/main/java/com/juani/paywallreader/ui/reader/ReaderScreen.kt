@@ -249,6 +249,7 @@ fun ReaderScreen(
                                     view?.postDelayed({ view.applyReaderChrome() }, 700L)
                                         view?.loadFallbackReaderIfBlank(url, 2_500L)
                                 }
+                                view?.loadFallbackReaderIfPaywalled(url, 2_500L)
                                 val originalUrl = currentUrl.toOriginalArticleUrl()
                                 if (!currentUrl.isReaderServiceUrl() && originalUrl.isLikelyWebUrl()) {
                                     onRecordVisit(currentTitle, originalUrl, sourceName)
@@ -669,6 +670,11 @@ private val ALLOWED_READER_HOSTS = setOf(
     "archive.ph",
 )
 
+private val PAYWALL_FALLBACK_HOSTS = setOf(
+    "www.wired.com",
+    "wired.com",
+)
+
 private val BLOCKED_AD_HOST_PARTS = listOf(
     "doubleclick.net",
     "googlesyndication.com",
@@ -740,10 +746,21 @@ private fun Uri.readerOriginalUrl(): String? {
 
 private fun Uri.isLikelyArticleUrl(): Boolean {
     val segments = pathSegments.filter { it.isNotBlank() }
+    val firstSegment = segments.firstOrNull().orEmpty()
     val lastSegment = segments.lastOrNull().orEmpty()
-    return segments.size >= 3 ||
+    return (segments.size >= 2 && firstSegment in ARTICLE_PATH_PREFIXES) ||
+        segments.size >= 3 ||
         (segments.size >= 2 && lastSegment.length >= 20 && ("-" in lastSegment || lastSegment.endsWith(".html")))
 }
+
+private val ARTICLE_PATH_PREFIXES = setOf(
+    "article",
+    "articles",
+    "news",
+    "review",
+    "reviews",
+    "story",
+)
 
 private fun Uri.isBlockedAdResource(): Boolean {
     val normalizedHost = host?.lowercase().orEmpty()
@@ -900,7 +917,14 @@ private fun WebView.applySiteChromeCleanup() {
             document.documentElement.classList.remove('paywall-reader-economist-unlocked');
           }
 
-          if (location.hostname.indexOf('wired.com') !== -1) {
+          var decodedLocation = '';
+          try {
+            decodedLocation = decodeURIComponent(location.href);
+          } catch (error) {
+            decodedLocation = location.href;
+          }
+
+          if (location.hostname.indexOf('wired.com') !== -1 || decodedLocation.indexOf('wired.com') !== -1) {
             document.documentElement.classList.add('paywall-reader-wired-light');
             document.documentElement.style.colorScheme = 'light';
             if (document.body) {
@@ -952,6 +976,60 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
                             UNWALL_HOST -> {
                                 loadOriginalWithoutJavaScriptFallback(originalUrl)
                             }
+                        }
+                    }
+                }
+            }
+        },
+        delayMillis,
+    )
+}
+
+private fun WebView.loadFallbackReaderIfPaywalled(loadedUrl: String?, delayMillis: Long) {
+    val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
+    val loadedHost = loadedUri.host ?: return
+    if (loadedHost !in ALLOWED_READER_HOSTS && loadedHost !in PAYWALL_FALLBACK_HOSTS) {
+        return
+    }
+
+    postDelayed(
+        {
+            evaluateJavascript(
+                """
+                (function() {
+                  var text = document.body ? (document.body.innerText || '').toLowerCase() : '';
+                  return [
+                    'this article is exclusive to subscribers',
+                    'start your free trial and plug in',
+                    'subscribe to continue',
+                    'sign in to continue reading',
+                    'already a subscriber?'
+                  ].some(function(marker) { return text.indexOf(marker) !== -1; });
+                })();
+                """.trimIndent(),
+            ) { result ->
+                if (result?.trim('"') != "true") {
+                    return@evaluateJavascript
+                }
+
+                val currentUrl = url ?: loadedUrl ?: return@evaluateJavascript
+                val currentUri = runCatching { Uri.parse(currentUrl) }.getOrNull() ?: return@evaluateJavascript
+                val originalUrl = currentUri.readerOriginalUrl() ?: currentUrl
+                val originalUri = runCatching { Uri.parse(originalUrl) }.getOrNull() ?: return@evaluateJavascript
+                when (currentUri.host) {
+                    ARTICLE_READER_HOST -> {
+                        settings.javaScriptEnabled = true
+                        loadUrl(originalUri.toUnwallUrl())
+                    }
+
+                    UNWALL_HOST -> loadOriginalWithoutJavaScriptFallback(originalUrl)
+
+                    else -> {
+                        if (settings.javaScriptEnabled) {
+                            settings.javaScriptEnabled = true
+                            loadUrl(originalUri.toArticleReaderUrl())
+                        } else {
+                            loadArchiveSearch(originalUrl)
                         }
                     }
                 }
