@@ -6,6 +6,7 @@ import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.domain.model.Source
+import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -51,6 +52,24 @@ class SourceRepositoryTest {
         repository.createFolder("  Tech  ")
 
         assertEquals(listOf("Tech"), sourceDao.folders.value.map { it.name })
+    }
+
+    @Test
+    fun `deleteFolder moves sources to unfiled and removes folder`() = runTest {
+        sourceDao.insertFolder(FolderEntity(name = "Tech"))
+        sourceDao.seed(
+            SourceEntity(
+                id = 1,
+                name = "Example",
+                url = "https://example.com",
+                folderName = "Tech",
+            ),
+        )
+
+        repository.deleteFolder(" Tech ")
+
+        assertEquals(UNFILED_FOLDER_NAME, sourceDao.entities.value.single().folderName)
+        assertEquals(listOf(UNFILED_FOLDER_NAME), sourceDao.folders.value.map { it.name })
     }
 
     @Test
@@ -175,8 +194,22 @@ private class FakeSourceDao : SourceDao {
         }
     }
 
+    override suspend fun moveSourcesToFolder(folderName: String, targetFolder: String) {
+        entities.value = entities.value.map { entity ->
+            if (entity.folderName == folderName) {
+                entity.copy(folderName = targetFolder)
+            } else {
+                entity
+            }
+        }
+    }
+
     override suspend fun delete(source: SourceEntity) {
         entities.value = entities.value.filterNot { it.id == source.id }
+    }
+
+    override suspend fun deleteFolder(folderName: String) {
+        folders.value = folders.value.filterNot { it.name == folderName }
     }
 
     override suspend fun countByUrl(url: String): Int =

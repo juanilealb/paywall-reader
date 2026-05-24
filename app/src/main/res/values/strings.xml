@@ -31,6 +31,9 @@
     <string name="read_later">Read later</string>
     <string name="history">Historial</string>
     <string name="new_folder">Nueva carpeta</string>
+    <string name="delete_folder">Eliminar carpeta</string>
+    <string name="delete_folder_title">Eliminar %1$s</string>
+    <string name="delete_folder_message">Las fuentes de esta carpeta no se borran; pasan a Sin carpeta.</string>
     <string name="empty_search_title">Sin resultados</string>
     <string name="empty_search_subtitle">Probá con otro nombre, dominio o carpeta.</string>
     <string name="empty_read_later">Sin lecturas guardadas</string>

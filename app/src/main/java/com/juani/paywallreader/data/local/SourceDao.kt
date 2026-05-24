@@ -30,8 +30,14 @@ interface SourceDao {
     @Query("UPDATE sources SET name = :name, url = :url, folderName = :folderName WHERE id = :id")
     suspend fun updateSource(id: Long, name: String, url: String, folderName: String)
 
+    @Query("UPDATE sources SET folderName = :targetFolder WHERE folderName = :folderName")
+    suspend fun moveSourcesToFolder(folderName: String, targetFolder: String)
+
     @Delete
     suspend fun delete(source: SourceEntity)
+
+    @Query("DELETE FROM folders WHERE name = :folderName")
+    suspend fun deleteFolder(folderName: String)
 
     @Query("SELECT COUNT(*) FROM sources WHERE url = :url")
     suspend fun countByUrl(url: String): Int

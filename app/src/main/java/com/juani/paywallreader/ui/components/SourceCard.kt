@@ -87,14 +87,11 @@ fun SourceCard(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = { onClick(source) },
-                    onLongClick = {
-                        if (!source.isDefault) menuExpanded = true
-                    },
+                    onLongClick = { menuExpanded = true },
                 ),
             shape = RoundedCornerShape(16.dp),
             color = when {
                 selected -> MaterialTheme.colorScheme.primaryContainer
-                source.isDefault -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
                 else -> MaterialTheme.colorScheme.surfaceContainerLow
             },
             contentColor = if (selected) {

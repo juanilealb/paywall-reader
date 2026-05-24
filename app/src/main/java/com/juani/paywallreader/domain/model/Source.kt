@@ -1,11 +1,13 @@
 package com.juani.paywallreader.domain.model
 
+const val UNFILED_FOLDER_NAME = "Sin carpeta"
+
 data class Source(
     val id: Long,
     val name: String,
     val url: String,
     val isDefault: Boolean,
-    val folderName: String = "News",
+    val folderName: String = UNFILED_FOLDER_NAME,
 )
 
 data class ReadingItem(

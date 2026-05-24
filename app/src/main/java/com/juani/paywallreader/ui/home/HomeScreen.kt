@@ -92,6 +92,7 @@ import com.juani.paywallreader.R
 import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
+import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
@@ -142,6 +143,7 @@ fun HomeRoute(
         onMarkRead = viewModel::markRead,
         onClearHistory = viewModel::clearHistory,
         onCreateFolder = viewModel::createFolder,
+        onDeleteFolder = viewModel::deleteFolder,
         onUpdateSource = viewModel::updateSource,
         existingUrls = uiState.sources.map { it.url }.toSet(),
         addSourceRequest = addSourceRequest,
@@ -171,6 +173,7 @@ fun HomeScreen(
     onMarkRead: (String) -> Unit,
     onClearHistory: () -> Unit,
     onCreateFolder: (String) -> Unit,
+    onDeleteFolder: (String) -> Unit,
     onUpdateSource: (Source, String, String, String) -> Unit,
     existingUrls: Set<String>,
     addSourceRequest: Int = 0,
@@ -181,9 +184,10 @@ fun HomeScreen(
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
     var showEditSourceSheet by rememberSaveable { mutableStateOf(false) }
     var showNewFolderDialog by rememberSaveable { mutableStateOf(false) }
+    var showDeleteFolderConfirmation by rememberSaveable { mutableStateOf(false) }
     var showClearHistoryConfirmation by rememberSaveable { mutableStateOf(false) }
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
-    var addSourceInitialFolder by rememberSaveable { mutableStateOf("News") }
+    var addSourceInitialFolder by rememberSaveable { mutableStateOf(UNFILED_FOLDER_NAME) }
     var sourceToEdit by remember { mutableStateOf<Source?>(null) }
     var newFolderName by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
@@ -238,7 +242,7 @@ fun HomeScreen(
     LaunchedEffect(addSourceRequest) {
         if (addSourceRequest > 0) {
             addSourceInitialUrl = ""
-            addSourceInitialFolder = selectedFolder ?: "News"
+            addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
             showAddSourceSheet = true
         }
     }
@@ -340,6 +344,16 @@ fun HomeScreen(
                                 SectionHeader(
                                     title = selectedFolder ?: stringResource(R.string.all_sources),
                                     count = visibleSources.size,
+                                    action = selectedFolder?.takeIf { it != UNFILED_FOLDER_NAME }?.let { folder ->
+                                        {
+                                            IconButton(onClick = { showDeleteFolderConfirmation = true }) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Delete,
+                                                    contentDescription = stringResource(R.string.delete_folder),
+                                                )
+                                            }
+                                        }
+                                    },
                                 )
                             }
                             items(
@@ -485,7 +499,7 @@ fun HomeScreen(
                                 ?.coerceToText(context)
                                 ?.toString()
                             addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
-                            addSourceInitialFolder = selectedFolder ?: "News"
+                            addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
                             showAddSourceSheet = true
                         }
                     },
@@ -605,6 +619,33 @@ fun HomeScreen(
                 }
             },
         )
+    }
+
+    if (showDeleteFolderConfirmation) {
+        val folder = selectedFolder
+        if (folder != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteFolderConfirmation = false },
+                title = { Text(stringResource(R.string.delete_folder_title, folder)) },
+                text = { Text(stringResource(R.string.delete_folder_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteFolderConfirmation = false
+                            selectedFolder = null
+                            onDeleteFolder(folder)
+                        },
+                    ) {
+                        Text(stringResource(R.string.delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteFolderConfirmation = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
     }
 
     if (showClearHistoryConfirmation) {
@@ -957,6 +998,7 @@ private fun SectionHeader(
     title: String,
     count: Int,
     modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -979,6 +1021,7 @@ private fun SectionHeader(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        action?.invoke()
     }
 }
 
@@ -1421,6 +1464,7 @@ private fun HomeScreenPreview() {
             onMarkRead = {},
             onClearHistory = {},
             onCreateFolder = {},
+            onDeleteFolder = {},
             onUpdateSource = { _, _, _, _ -> },
             existingUrls = emptySet(),
         )

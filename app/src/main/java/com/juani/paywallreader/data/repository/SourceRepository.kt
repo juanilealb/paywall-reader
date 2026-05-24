@@ -8,6 +8,7 @@ import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
+import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import com.juani.paywallreader.domain.model.validateSourceUrl
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -31,7 +32,7 @@ class SourceRepository(
         entities.map { it.toDomain() }
     }
 
-    suspend fun addSource(name: String, url: String, folderName: String = DEFAULT_FOLDER_NAME) {
+    suspend fun addSource(name: String, url: String, folderName: String = UNFILED_FOLDER_NAME) {
         val validatedUrl = validateSourceUrl(url)
         if (name.isBlank() || !validatedUrl.isValid || sourceDao.countByUrl(validatedUrl.normalizedUrl) > 0) {
             return
@@ -51,6 +52,18 @@ class SourceRepository(
 
     suspend fun createFolder(folderName: String) {
         sourceDao.insertFolder(FolderEntity(name = folderName.normalizedFolderName()))
+    }
+
+    suspend fun deleteFolder(folderName: String) {
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName == UNFILED_FOLDER_NAME) return
+
+        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME))
+        sourceDao.moveSourcesToFolder(
+            folderName = normalizedFolderName,
+            targetFolder = UNFILED_FOLDER_NAME,
+        )
+        sourceDao.deleteFolder(normalizedFolderName)
     }
 
     suspend fun updateSource(source: Source, name: String, url: String, folderName: String) {
@@ -112,8 +125,6 @@ class SourceRepository(
     }
 }
 
-private const val DEFAULT_FOLDER_NAME = "News"
-
 private fun SourceEntity.toDomain(): Source =
     Source(
         id = id,
@@ -151,7 +162,7 @@ private fun HistoryEntity.toDomain(): HistoryItem =
     )
 
 private fun String.normalizedFolderName(): String =
-    trim().ifBlank { DEFAULT_FOLDER_NAME }
+    trim().ifBlank { UNFILED_FOLDER_NAME }
 
 private fun String.toDisplayTitle(): String =
     removePrefix("https://")

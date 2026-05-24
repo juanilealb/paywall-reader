@@ -55,6 +55,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteFolder(folderName: String) {
+        viewModelScope.launch {
+            repository.deleteFolder(folderName)
+        }
+    }
+
     fun updateSource(source: Source, name: String, url: String, folderName: String) {
         viewModelScope.launch {
             repository.updateSource(source, name, url, folderName)

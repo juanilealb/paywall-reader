@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.juani.paywallreader.R
+import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import com.juani.paywallreader.domain.model.validateSourceUrl
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import kotlinx.coroutines.launch
@@ -62,7 +63,7 @@ fun AddSourceSheet(
     initialName: String = "",
     existingUrls: Set<String> = emptySet(),
     initialUrl: String = "",
-    initialFolderName: String = "News",
+    initialFolderName: String = UNFILED_FOLDER_NAME,
     existingFolders: List<String> = emptyList(),
     title: String? = null,
     subtitle: String? = null,
@@ -248,7 +249,7 @@ fun AddSourceSheet(
                             Button(
                                 enabled = canSave,
                                 onClick = {
-                                    onSave(name, normalizedUrl, folderName.ifBlank { "News" })
+                                    onSave(name, normalizedUrl, folderName.ifBlank { UNFILED_FOLDER_NAME })
                                     scope.launch {
                                         sheetState.hide()
                                         onDismiss()
@@ -277,7 +278,7 @@ fun AddSourceSheet(
                                     text = { Text(stringResource(R.string.save_and_open)) },
                                     onClick = {
                                         saveMenuExpanded = false
-                                        onSaveAndOpen(name, normalizedUrl, folderName.ifBlank { "News" })
+                                        onSaveAndOpen(name, normalizedUrl, folderName.ifBlank { UNFILED_FOLDER_NAME })
                                         scope.launch {
                                             sheetState.hide()
                                             onDismiss()
@@ -288,7 +289,7 @@ fun AddSourceSheet(
                                     text = { Text(stringResource(R.string.save_and_add_another)) },
                                     onClick = {
                                         saveMenuExpanded = false
-                                        onSave(name, normalizedUrl, folderName.ifBlank { "News" })
+                                        onSave(name, normalizedUrl, folderName.ifBlank { UNFILED_FOLDER_NAME })
                                         name = ""
                                         url = ""
                                     },
@@ -301,7 +302,7 @@ fun AddSourceSheet(
                     Button(
                         enabled = canSave,
                         onClick = {
-                            onSave(name, normalizedUrl, folderName.ifBlank { "News" })
+                            onSave(name, normalizedUrl, folderName.ifBlank { UNFILED_FOLDER_NAME })
                             scope.launch {
                                 sheetState.hide()
                                 onDismiss()
