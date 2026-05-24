@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .addCallback(DefaultSourcesCallback())
                 .build()
 
@@ -92,25 +92,42 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("INSERT OR IGNORE INTO folders(name, createdAt) VALUES ('News', 1)")
             }
         }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("INSERT OR IGNORE INTO folders(name, createdAt) VALUES ('$BLOGS_FOLDER', 2)")
+                db.execSQL(
+                    """
+                    INSERT INTO sources(name, url, isDefault, folderName, createdAt)
+                    SELECT '${MEDIUM_SOURCE.name}', '${MEDIUM_SOURCE.url}', 0, '$BLOGS_FOLDER', ${MEDIUM_SOURCE.createdAt}
+                    WHERE NOT EXISTS (SELECT 1 FROM sources WHERE url = '${MEDIUM_SOURCE.url}')
+                    """.trimIndent(),
+                )
+            }
+        }
     }
 }
 
 private class DefaultSourcesCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
-        db.insert(
-            "folders",
-            0,
-            ContentValues().apply {
-                put("name", "News")
-                put("createdAt", 1)
-            },
-        )
+        db.insert("folders", 0, "News".toContentValues(createdAt = 1))
+        db.insert("folders", 0, BLOGS_FOLDER.toContentValues(createdAt = 2))
         DEFAULT_SOURCES.forEach { source ->
             db.insert("sources", 0, source.toContentValues())
         }
     }
 }
+
+private const val BLOGS_FOLDER = "Blogs"
+
+private val MEDIUM_SOURCE = SourceEntity(
+    name = "Medium",
+    url = "https://medium.com",
+    isDefault = false,
+    folderName = BLOGS_FOLDER,
+    createdAt = 6,
+)
 
 private val DEFAULT_SOURCES = listOf(
     SourceEntity(
@@ -148,6 +165,7 @@ private val DEFAULT_SOURCES = listOf(
         folderName = "News",
         createdAt = 5,
     ),
+    MEDIUM_SOURCE,
 )
 
 private fun SourceEntity.toContentValues(): ContentValues =
@@ -156,5 +174,11 @@ private fun SourceEntity.toContentValues(): ContentValues =
         put("url", url)
         put("isDefault", isDefault)
         put("folderName", folderName)
+        put("createdAt", createdAt)
+    }
+
+private fun String.toContentValues(createdAt: Long): ContentValues =
+    ContentValues().apply {
+        put("name", this@toContentValues)
         put("createdAt", createdAt)
     }

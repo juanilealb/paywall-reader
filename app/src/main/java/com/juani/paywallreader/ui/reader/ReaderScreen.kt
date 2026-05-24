@@ -5,6 +5,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -239,6 +240,7 @@ fun ReaderScreen(
                                 isLoading = false
                                 currentUrl = url ?: view?.url ?: currentUrl
                                 currentTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentTitle
+                                CookieManager.getInstance().flush()
                                 updateNavigationState(view)
                                     view?.applyAdCleanup()
                                     view?.applySiteChromeCleanup()
@@ -1137,6 +1139,12 @@ private fun ReaderError(
 }
 
 private fun WebView.configureReaderSettings() {
+    CookieManager.getInstance().apply {
+        setAcceptCookie(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            setAcceptThirdPartyCookies(this@configureReaderSettings, true)
+        }
+    }
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
     settings.loadsImagesAutomatically = true
