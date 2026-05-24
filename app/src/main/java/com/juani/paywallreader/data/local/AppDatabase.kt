@@ -5,12 +5,12 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.juani.paywallreader.R
 
 @Database(
     entities = [SourceEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,55 +27,67 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addCallback(DefaultSourcesCallback(context))
+                .addMigrations(MIGRATION_1_2)
+                .addCallback(DefaultSourcesCallback())
                 .build()
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DELETE FROM sources WHERE isDefault = 1")
+                DEFAULT_SOURCES.forEach { source ->
+                    db.insert("sources", 0, source.toContentValues())
+                }
+            }
+        }
     }
 }
 
-private class DefaultSourcesCallback(
-    private val context: Context,
-) : RoomDatabase.Callback() {
+private class DefaultSourcesCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
-        defaultSources(context).forEach { source ->
+        DEFAULT_SOURCES.forEach { source ->
             db.insert("sources", 0, source.toContentValues())
         }
     }
-
-    private fun defaultSources(context: Context): List<SourceEntity> =
-        listOf(
-            SourceEntity(
-                name = context.getString(R.string.default_source_clarin),
-                url = "https://www.clarin.com",
-                isDefault = true,
-            ),
-            SourceEntity(
-                name = context.getString(R.string.default_source_lanacion),
-                url = "https://www.lanacion.com.ar",
-                isDefault = true,
-            ),
-            SourceEntity(
-                name = context.getString(R.string.default_source_infobae),
-                url = "https://www.infobae.com",
-                isDefault = true,
-            ),
-            SourceEntity(
-                name = context.getString(R.string.default_source_ambito),
-                url = "https://www.ambito.com",
-                isDefault = true,
-            ),
-            SourceEntity(
-                name = context.getString(R.string.default_source_pagina12),
-                url = "https://www.pagina12.com.ar",
-                isDefault = true,
-            ),
-        )
-
-    private fun SourceEntity.toContentValues(): ContentValues =
-        ContentValues().apply {
-            put("name", name)
-            put("url", url)
-            put("isDefault", isDefault)
-            put("createdAt", createdAt)
-        }
 }
+
+private val DEFAULT_SOURCES = listOf(
+    SourceEntity(
+        name = "Clarín",
+        url = "https://www.clarin.com",
+        isDefault = true,
+        createdAt = 1,
+    ),
+    SourceEntity(
+        name = "The Verge",
+        url = "https://www.theverge.com",
+        isDefault = true,
+        createdAt = 2,
+    ),
+    SourceEntity(
+        name = "The New York Times",
+        url = "https://www.nytimes.com",
+        isDefault = true,
+        createdAt = 3,
+    ),
+    SourceEntity(
+        name = "WIRED",
+        url = "https://www.wired.com",
+        isDefault = true,
+        createdAt = 4,
+    ),
+    SourceEntity(
+        name = "The Economist",
+        url = "https://www.economist.com",
+        isDefault = true,
+        createdAt = 5,
+    ),
+)
+
+private fun SourceEntity.toContentValues(): ContentValues =
+    ContentValues().apply {
+        put("name", name)
+        put("url", url)
+        put("isDefault", isDefault)
+        put("createdAt", createdAt)
+    }
