@@ -4,7 +4,6 @@
     <string name="home_subtitle">Tus diarios y portales listos para leer con menos fricción.</string>
     <string name="saved_sources_count">%1$d fuentes guardadas</string>
     <string name="add_source">Agregar fuente</string>
-    <string name="add_source_from_clipboard">Pegar URL</string>
     <string name="add_source_subtitle">Guardá el sitio una vez y volvé a leerlo desde la lista.</string>
     <string name="source_name">Nombre</string>
     <string name="source_url">URL</string>
@@ -12,18 +11,12 @@
     <string name="invalid_url">Ingresá una URL válida</string>
     <string name="duplicate_source">Esa fuente ya está guardada</string>
     <string name="save">Guardar</string>
-    <string name="save_and_open">Guardar y abrir</string>
-    <string name="save_and_add_another">Guardar y agregar otra</string>
-    <string name="save_more_options">Más opciones de guardado</string>
     <string name="cancel">Cancelar</string>
     <string name="delete">Eliminar</string>
     <string name="delete_source_title">Eliminar fuente</string>
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
     <string name="source_options">Opciones de fuente</string>
     <string name="default_source_label">Default</string>
-    <string name="source_filter_all">Todas</string>
-    <string name="source_filter_defaults">Default</string>
-    <string name="source_filter_custom">Mías</string>
     <string name="reader_loading">Cargando sin paywall…</string>
     <string name="reader_error_title">No se pudo cargar</string>
     <string name="reader_error_message">Revisá la conexión o probá abrir la página original.</string>

@@ -1,6 +1,5 @@
 package com.juani.paywallreader.ui.home
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,30 +14,21 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FloatingActionButtonMenu
-import androidx.compose.material3.FloatingActionButtonMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,7 +43,6 @@ import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
@@ -72,7 +61,6 @@ fun HomeRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
     sources: List<Source>,
@@ -83,68 +71,20 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
-    var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
-    var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedFilter by rememberSaveable { mutableStateOf(SourceFilter.All) }
-    val clipboardManager = LocalClipboardManager.current
-    val filteredSources = remember(sources, selectedFilter) {
-        when (selectedFilter) {
-            SourceFilter.All -> sources
-            SourceFilter.Defaults -> sources.filter { it.isDefault }
-            SourceFilter.Custom -> sources.filterNot { it.isDefault }
-        }
-    }
-
-    BackHandler(fabMenuExpanded) {
-        fabMenuExpanded = false
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButtonMenu(
-                expanded = fabMenuExpanded,
-                button = {
-                    ToggleFloatingActionButton(
-                        checked = fabMenuExpanded,
-                        onCheckedChange = { fabMenuExpanded = !fabMenuExpanded },
-                    ) {
-                        Icon(
-                            imageVector = if (fabMenuExpanded) Icons.Rounded.Close else Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.add_source),
-                        )
-                    }
+            ExtendedFloatingActionButton(
+                onClick = { showAddSourceSheet = true },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                    )
                 },
-            ) {
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        fabMenuExpanded = false
-                        addSourceInitialUrl = ""
-                        showAddSourceSheet = true
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = null,
-                        )
-                    },
-                    text = { Text(stringResource(R.string.add_source)) },
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        fabMenuExpanded = false
-                        addSourceInitialUrl = clipboardManager.getText()?.text.orEmpty()
-                        showAddSourceSheet = true
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.ContentPaste,
-                            contentDescription = null,
-                        )
-                    },
-                    text = { Text(stringResource(R.string.add_source_from_clipboard)) },
-                )
-            }
+                text = { Text(stringResource(R.string.add_source)) },
+            )
         },
     ) { paddingValues ->
         BoxWithConstraints(
@@ -171,17 +111,7 @@ fun HomeScreen(
                     HomeHeader()
                 }
 
-                if (sources.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SourceFilterBar(
-                            selectedFilter = selectedFilter,
-                            onFilterSelected = { selectedFilter = it },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-
-                if (filteredSources.isEmpty()) {
+                if (sources.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         EmptySources(
                             modifier = Modifier
@@ -191,7 +121,7 @@ fun HomeScreen(
                     }
                 } else {
                     items(
-                        items = filteredSources,
+                        items = sources,
                         key = { it.id },
                     ) { source ->
                         SourceCard(
@@ -209,28 +139,10 @@ fun HomeScreen(
     if (showAddSourceSheet) {
         AddSourceSheet(
             onSave = onAddSource,
-            onSaveAndOpen = { name, url ->
-                onAddSource(name, url)
-                onSourceClick(
-                    Source(
-                        id = 0,
-                        name = name,
-                        url = url,
-                        isDefault = false,
-                    ),
-                )
-            },
             onDismiss = { showAddSourceSheet = false },
             existingUrls = existingUrls,
-            initialUrl = addSourceInitialUrl,
         )
     }
-}
-
-private enum class SourceFilter {
-    All,
-    Defaults,
-    Custom,
 }
 
 private data class HomeLayoutSpec(
@@ -279,44 +191,7 @@ private fun rememberHomeLayoutSpec(maxWidth: Dp): HomeLayoutSpec =
             itemSpacing = 14.dp,
             emptyStateTopPadding = 48.dp,
         )
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun SourceFilterBar(
-    selectedFilter: SourceFilter,
-    onFilterSelected: (SourceFilter) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val allLabel = stringResource(R.string.source_filter_all)
-    val defaultsLabel = stringResource(R.string.source_filter_defaults)
-    val customLabel = stringResource(R.string.source_filter_custom)
-
-    ButtonGroup(
-        overflowIndicator = { menuState ->
-            ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-        },
-        modifier = modifier.padding(bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.All) },
-            label = allLabel,
-            enabled = selectedFilter != SourceFilter.All,
-        )
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.Defaults) },
-            label = defaultsLabel,
-            enabled = selectedFilter != SourceFilter.Defaults,
-        )
-        clickableItem(
-            onClick = { onFilterSelected(SourceFilter.Custom) },
-            label = customLabel,
-            enabled = selectedFilter != SourceFilter.Custom,
-        )
     }
-}
 
 @Composable
 private fun HomeHeader(

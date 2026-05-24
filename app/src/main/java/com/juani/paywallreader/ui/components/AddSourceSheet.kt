@@ -13,20 +13,14 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Title
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,22 +42,19 @@ import com.juani.paywallreader.domain.model.validateSourceUrl
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSourceSheet(
     onSave: (name: String, url: String) -> Unit,
-    onSaveAndOpen: (name: String, url: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     existingUrls: Set<String> = emptySet(),
-    initialUrl: String = "",
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var isContentVisible by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf(initialUrl) }
-    var saveMenuExpanded by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf("") }
     val validatedUrl = validateSourceUrl(url)
     val normalizedUrl = validatedUrl.normalizedUrl
     val isDuplicate = normalizedUrl in existingUrls
@@ -164,60 +155,19 @@ fun AddSourceSheet(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                SplitButtonLayout(
-                    leadingButton = {
-                        Button(
-                            enabled = canSave,
-                            onClick = {
-                                onSave(name, normalizedUrl)
-                                scope.launch {
-                                    sheetState.hide()
-                                    onDismiss()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.save))
-                        }
-                    },
-                    trailingButton = {
-                        FilledIconButton(
-                            enabled = canSave,
-                            onClick = { saveMenuExpanded = true },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = stringResource(R.string.save_more_options),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = saveMenuExpanded,
-                            onDismissRequest = { saveMenuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.save_and_open)) },
-                                onClick = {
-                                    saveMenuExpanded = false
-                                    onSaveAndOpen(name, normalizedUrl)
-                                    scope.launch {
-                                        sheetState.hide()
-                                        onDismiss()
-                                    }
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.save_and_add_another)) },
-                                onClick = {
-                                    saveMenuExpanded = false
-                                    onSave(name, normalizedUrl)
-                                    name = ""
-                                    url = ""
-                                },
-                            )
+                Button(
+                    enabled = canSave,
+                    onClick = {
+                        onSave(name, normalizedUrl)
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                )
+                ) {
+                    Text(stringResource(R.string.save))
+                }
                 TextButton(
                     onClick = {
                         scope.launch {
@@ -240,7 +190,6 @@ private fun AddSourceSheetPreview() {
     PaywallReaderTheme {
         AddSourceSheet(
             onSave = { _, _ -> },
-            onSaveAndOpen = { _, _ -> },
             onDismiss = {},
         )
     }
