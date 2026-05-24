@@ -97,6 +97,7 @@ import kotlinx.coroutines.launch
 fun HomeRoute(
     onSourceClick: (Source) -> Unit,
     modifier: Modifier = Modifier,
+    showAddSourceFab: Boolean = true,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -133,6 +134,7 @@ fun HomeRoute(
         onMarkRead = viewModel::markRead,
         onClearHistory = viewModel::clearHistory,
         existingUrls = uiState.sources.map { it.url }.toSet(),
+        showAddSourceFab = showAddSourceFab,
         modifier = modifier,
     )
 }
@@ -157,6 +159,7 @@ fun HomeScreen(
     onMarkRead: (String) -> Unit,
     onClearHistory: () -> Unit,
     existingUrls: Set<String>,
+    showAddSourceFab: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
@@ -434,7 +437,7 @@ fun HomeScreen(
                 }
             }
 
-            if (selectedSection == HomeSection.Sources) {
+            if (selectedSection == HomeSection.Sources && showAddSourceFab) {
                 FloatingActionButton(
                     onClick = {
                         focusManager.clearFocus()

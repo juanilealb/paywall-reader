@@ -28,6 +28,10 @@ import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -62,13 +66,18 @@ fun AppNavigation() {
         directive = listDetailDirective,
         paneExpansionState = listDetailPaneExpansionState,
     )
+    var hasOpenReader by rememberSaveable { mutableStateOf(false) }
+    val closeReader = {
+        backStack.removeLastOrNull()
+        hasOpenReader = backStack.any { it is AppRoute.Reader }
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isMultiPaneWidth = maxWidth >= 600.dp
 
         NavDisplay(
             backStack = backStack,
-            onBack = { backStack.removeLastOrNull() },
+            onBack = { closeReader() },
             sceneStrategies = listOf(listDetailStrategy),
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(),
@@ -83,7 +92,9 @@ fun AppNavigation() {
                     ),
                 ) {
                     HomeRoute(
+                        showAddSourceFab = !isMultiPaneWidth || !hasOpenReader,
                         onSourceClick = { source ->
+                            hasOpenReader = true
                             backStack.add(AppRoute.Reader(source.url, source.name))
                         },
                     )
@@ -94,7 +105,7 @@ fun AppNavigation() {
                     ReaderRoute(
                         sourceName = route.name.ifBlank { route.url },
                         sourceUrl = route.url,
-                        onBack = { backStack.removeLastOrNull() },
+                        onBack = { closeReader() },
                         showBackButton = !isMultiPaneWidth,
                     )
                 }

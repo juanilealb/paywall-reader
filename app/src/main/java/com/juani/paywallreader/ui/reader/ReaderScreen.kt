@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -142,9 +141,8 @@ fun ReaderScreen(
     }
     val openReaderVersion = {
         val url = webView?.url ?: currentUrl.ifBlank { sourceUrl }
-        val uri = Uri.parse(url)
-        if (!uri.isReaderServiceUrl()) {
-            webView?.loadPrimaryReader(uri)
+        if (!url.isReaderServiceUrl()) {
+            webView?.loadArchiveSearch(url.toOriginalArticleUrl())
         }
     }
     val saveCurrentForLater = {
@@ -153,12 +151,6 @@ fun ReaderScreen(
     }
     val markCurrentRead = {
         onMarkRead((webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl())
-    }
-    val openArchiveSearch = {
-        val url = (webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl()
-        webView?.settings?.javaScriptEnabled = true
-        webView?.loadUrl(url.toArchiveSearchUrl())
-        Unit
     }
     fun updateNavigationState(view: WebView?) {
         canNavigateBack = view?.canGoBack() == true
@@ -263,7 +255,7 @@ fun ReaderScreen(
                                     !url.isReaderServiceUrl() &&
                                     url.isLikelyArticleUrl()
                                 ) {
-                                    view?.loadPrimaryReader(url)
+                                    view?.loadArchiveSearch(url.toString())
                                     return true
                                 }
 
@@ -364,7 +356,6 @@ fun ReaderScreen(
                 onOpenOriginal = openOriginal,
                 onOpenReader = openReaderVersion,
                 onSaveForLater = saveCurrentForLater,
-                onOpenArchive = openArchiveSearch,
                 onMarkRead = markCurrentRead,
                 onShare = shareOriginal,
                 archiveMode = isArchivePage,
@@ -409,7 +400,6 @@ private fun ReaderFloatingToolbar(
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
     onSaveForLater: () -> Unit,
-    onOpenArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
     archiveMode: Boolean,
@@ -449,7 +439,6 @@ private fun ReaderFloatingToolbar(
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
                 onSaveForLater = onSaveForLater,
-                onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
                 onCollapse = { onExpandedChange(false) },
@@ -483,7 +472,6 @@ private fun ReaderFloatingToolbar(
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
                 onSaveForLater = onSaveForLater,
-                onOpenArchive = onOpenArchive,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
                 onCollapse = {},
@@ -532,7 +520,6 @@ private fun ReaderToolbarActions(
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
     onSaveForLater: () -> Unit,
-    onOpenArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
     onCollapse: () -> Unit,
@@ -590,13 +577,6 @@ private fun ReaderToolbarActions(
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.Article,
                 contentDescription = stringResource(R.string.reader_open_reader),
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        IconButton(onClick = onOpenArchive, modifier = Modifier.size(40.dp)) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = stringResource(R.string.reader_open_archive),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -849,9 +829,9 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
     )
 }
 
-private fun WebView.loadPrimaryReader(uri: Uri) {
+private fun WebView.loadArchiveSearch(url: String) {
     settings.javaScriptEnabled = true
-    loadUrl(uri.toArticleReaderUrl())
+    loadUrl(url.toArchiveSearchUrl())
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

@@ -49,9 +49,8 @@
     <string name="reader_web_back">Página anterior</string>
     <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
-    <string name="reader_open_reader">Abrir sin paywall</string>
+    <string name="reader_open_reader">Buscar en archive.ph</string>
     <string name="reader_save_later">Guardar en Read later</string>
-    <string name="reader_open_archive">Buscar en archive.ph</string>
     <string name="reader_mark_read">Leído</string>
     <string name="reader_share">Compartir</string>
     <string name="reader_expand_toolbar">Mostrar acciones</string>
