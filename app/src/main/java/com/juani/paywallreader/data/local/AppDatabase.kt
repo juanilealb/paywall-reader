@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(DefaultSourcesCallback())
                 .build()
 
@@ -105,6 +105,19 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("INSERT OR IGNORE INTO folders(name, createdAt) VALUES ('$BLOGS_FOLDER', 2)")
+                db.execSQL(
+                    """
+                    INSERT INTO sources(name, url, isDefault, folderName, createdAt)
+                    SELECT '${SUBSTACK_SOURCE.name}', '${SUBSTACK_SOURCE.url}', 0, '$BLOGS_FOLDER', ${SUBSTACK_SOURCE.createdAt}
+                    WHERE NOT EXISTS (SELECT 1 FROM sources WHERE url = '${SUBSTACK_SOURCE.url}')
+                    """.trimIndent(),
+                )
+            }
+        }
     }
 }
 
@@ -127,6 +140,14 @@ private val MEDIUM_SOURCE = SourceEntity(
     isDefault = false,
     folderName = BLOGS_FOLDER,
     createdAt = 6,
+)
+
+private val SUBSTACK_SOURCE = SourceEntity(
+    name = "Substack",
+    url = "https://substack.com",
+    isDefault = false,
+    folderName = BLOGS_FOLDER,
+    createdAt = 7,
 )
 
 private val DEFAULT_SOURCES = listOf(
@@ -166,6 +187,7 @@ private val DEFAULT_SOURCES = listOf(
         createdAt = 5,
     ),
     MEDIUM_SOURCE,
+    SUBSTACK_SOURCE,
 )
 
 private fun SourceEntity.toContentValues(): ContentValues =

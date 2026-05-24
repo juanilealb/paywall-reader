@@ -5,6 +5,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Message
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -232,6 +233,47 @@ fun ReaderScreen(
                                 progress = newProgress
                                     currentTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentTitle
                                     updateNavigationState(view)
+                                }
+
+                                override fun onCreateWindow(
+                                    view: WebView?,
+                                    isDialog: Boolean,
+                                    isUserGesture: Boolean,
+                                    resultMsg: Message?,
+                                ): Boolean {
+                                    if (!detectsAuthSurfaces || view == null || resultMsg == null) {
+                                        return false
+                                    }
+
+                                    val popup = WebView(view.context).apply {
+                                        configureReaderSettings(useBrowserUserAgent = true)
+                                        webViewClient = object : WebViewClient() {
+                                            override fun shouldOverrideUrlLoading(
+                                                popupView: WebView?,
+                                                request: WebResourceRequest?,
+                                            ): Boolean {
+                                                val popupUrl = request?.url?.toString() ?: return false
+                                                view.loadUrl(popupUrl)
+                                                popupView?.destroy()
+                                                return true
+                                            }
+
+                                            override fun onPageStarted(
+                                                popupView: WebView?,
+                                                url: String?,
+                                                favicon: Bitmap?,
+                                            ) {
+                                                if (!url.isNullOrBlank()) {
+                                                    view.loadUrl(url)
+                                                    popupView?.destroy()
+                                                }
+                                            }
+                                        }
+                                    }
+                                    val transport = resultMsg.obj as WebView.WebViewTransport
+                                    transport.webView = popup
+                                    resultMsg.sendToTarget()
+                                    return true
                                 }
                             }
                             webViewClient = object : WebViewClient() {
@@ -1020,6 +1062,16 @@ private fun WebView.installPageStateSignals(enabled: Boolean) {
                 background: #f7f4ed !important;
                 color: #242424 !important;
               }
+              html.paywall-reader-auth-surface [role="dialog"] {
+                position: fixed !important;
+                inset: 0 !important;
+                width: 100vw !important;
+                min-height: 100vh !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow-y: auto !important;
+                z-index: 2147483647 !important;
+              }
             `;
             document.head.appendChild(style);
           }
@@ -1038,7 +1090,12 @@ private fun WebView.installPageStateSignals(enabled: Boolean) {
               'remember me for faster sign in',
               'forgot email',
               'sign in to medium',
-              'sign in to substack'
+              'sign in to substack',
+              'iniciar sesión en substack',
+              'iniciar sesion en substack',
+              'tu correo electrónico',
+              'tu correo electronico',
+              'crear cuenta'
             ].some(function(marker) { return text.indexOf(marker) !== -1; });
             var hasAuthControls = !!document.querySelector(
               '[role="dialog"], [aria-modal="true"], dialog, form, input[type="email"], input[type="password"]'
@@ -1287,7 +1344,8 @@ private fun WebView.configureReaderSettings(useBrowserUserAgent: Boolean = false
     settings.loadsImagesAutomatically = true
     settings.allowFileAccess = false
     settings.allowContentAccess = false
-    settings.javaScriptCanOpenWindowsAutomatically = false
+    settings.javaScriptCanOpenWindowsAutomatically = useBrowserUserAgent
+    settings.setSupportMultipleWindows(useBrowserUserAgent)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         @Suppress("DEPRECATION")
         settings.forceDark = WebSettings.FORCE_DARK_OFF
