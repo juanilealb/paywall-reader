@@ -114,7 +114,7 @@ fun ReaderScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ),
@@ -186,7 +186,7 @@ fun ReaderScreen(
                                     return false
                                 }
 
-                                val url = request?.url ?: return false
+                                val url = request.url
                                 val scheme = url.scheme
                                 if (scheme != "http" && scheme != "https") {
                                     context.startActivity(Intent(Intent.ACTION_VIEW, url))
