@@ -499,16 +499,9 @@ private fun ReaderFloatingToolbar(
             expanded = expanded,
             floatingActionButton = {
                 ReaderRefreshFab(
-                    isLoading = isLoading,
-                    collapsed = !expanded,
                     vertical = true,
-                    onClick = {
-                        if (expanded) {
-                            onRefreshOrStop()
-                        } else {
-                            onExpandedChange(true)
-                        }
-                    },
+                    expanded = expanded,
+                    onClick = { onExpandedChange(!expanded) },
                 )
             },
             modifier = modifier,
@@ -522,11 +515,13 @@ private fun ReaderFloatingToolbar(
                 canNavigateForward = canNavigateForward,
                 showShareAction = false,
                 showOpenOriginal = false,
-                showCollapseAction = true,
+                showCollapseAction = false,
                 showClosePageAction = true,
+                showRefreshAction = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
+                onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
                 onSaveForLater = onSaveForLater,
@@ -542,16 +537,9 @@ private fun ReaderFloatingToolbar(
             expanded = expanded,
             floatingActionButton = {
                 ReaderRefreshFab(
-                    isLoading = isLoading,
-                    collapsed = !expanded,
                     vertical = false,
-                    onClick = {
-                        if (expanded) {
-                            onRefreshOrStop()
-                        } else {
-                            onExpandedChange(true)
-                        }
-                    },
+                    expanded = expanded,
+                    onClick = { onExpandedChange(!expanded) },
                 )
             },
             modifier = modifier.height(ReaderToolbarHeight),
@@ -565,11 +553,13 @@ private fun ReaderFloatingToolbar(
                 canNavigateForward = canNavigateForward,
                 showShareAction = false,
                 showOpenOriginal = false,
-                showCollapseAction = true,
+                showCollapseAction = false,
                 showClosePageAction = true,
+                showRefreshAction = true,
                 onBack = onBack,
                 onNavigateBack = onNavigateBack,
                 onNavigateForward = onNavigateForward,
+                onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
                 onSaveForLater = onSaveForLater,
@@ -586,9 +576,8 @@ private fun ReaderFloatingToolbar(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReaderRefreshFab(
-    isLoading: Boolean,
-    collapsed: Boolean = false,
     vertical: Boolean = false,
+    expanded: Boolean,
     onClick: () -> Unit,
 ) {
     Box(
@@ -597,18 +586,17 @@ private fun ReaderRefreshFab(
     ) {
         FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
             Icon(
-                imageVector = when {
-                    collapsed && vertical -> Icons.Rounded.KeyboardArrowUp
-                    collapsed -> Icons.AutoMirrored.Rounded.KeyboardArrowLeft
-                    isLoading -> Icons.Rounded.Close
-                    else -> Icons.Rounded.Refresh
+                imageVector = if (vertical && expanded) {
+                    Icons.Rounded.KeyboardArrowDown
+                } else if (vertical) {
+                    Icons.Rounded.KeyboardArrowUp
+                } else if (expanded) {
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight
+                } else {
+                    Icons.AutoMirrored.Rounded.KeyboardArrowLeft
                 },
                 contentDescription = stringResource(
-                    when {
-                        collapsed -> R.string.reader_expand_toolbar
-                        isLoading -> R.string.reader_stop_loading
-                        else -> R.string.reader_refresh
-                    },
+                    if (expanded) R.string.reader_collapse_toolbar else R.string.reader_expand_toolbar,
                 ),
             )
         }
@@ -624,9 +612,11 @@ private fun ReaderToolbarActions(
     showOpenOriginal: Boolean,
     showCollapseAction: Boolean,
     showClosePageAction: Boolean,
+    showRefreshAction: Boolean,
     onBack: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateForward: () -> Unit,
+    onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
     onSaveForLater: () -> Unit,
@@ -718,14 +708,19 @@ private fun ReaderToolbarActions(
             )
         }
     }
+    if (showRefreshAction) {
+        IconButton(onClick = onRefreshOrStop, modifier = Modifier.size(ReaderToolbarActionSize)) {
+            Icon(
+                imageVector = Icons.Rounded.Refresh,
+                contentDescription = stringResource(R.string.reader_refresh),
+                modifier = Modifier.size(ReaderToolbarIconSize),
+            )
+        }
+    }
     if (showCollapseAction) {
         IconButton(onClick = onCollapse, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
-                imageVector = if (vertical) {
-                    Icons.Rounded.KeyboardArrowDown
-                } else {
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight
-                },
+                imageVector = Icons.Rounded.KeyboardArrowDown,
                 contentDescription = stringResource(R.string.reader_collapse_toolbar),
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
