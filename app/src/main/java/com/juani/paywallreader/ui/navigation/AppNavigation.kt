@@ -147,6 +147,7 @@ fun AppNavigation() {
                         addSourceRequest = addSourceRequest,
                         selectedSourceUrl = openReaderUrl,
                         showAddSourceFab = !isMultiPaneWidth,
+                        showBottomControls = isMultiPaneWidth || openReaderUrl == null,
                         onSourceClick = { source ->
                             openReaderUrl = source.url
                             backStack.add(AppRoute.Reader(source.url, source.name))

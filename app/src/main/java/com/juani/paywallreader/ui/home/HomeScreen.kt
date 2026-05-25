@@ -109,6 +109,7 @@ fun HomeRoute(
     addSourceRequest: Int = 0,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
+    showBottomControls: Boolean = true,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -151,6 +152,7 @@ fun HomeRoute(
         addSourceRequest = addSourceRequest,
         selectedSourceUrl = selectedSourceUrl,
         showAddSourceFab = showAddSourceFab,
+        showBottomControls = showBottomControls,
         modifier = modifier,
     )
 }
@@ -181,6 +183,7 @@ fun HomeScreen(
     addSourceRequest: Int = 0,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
+    showBottomControls: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     var showAddSourceSheet by rememberSaveable { mutableStateOf(false) }
@@ -274,7 +277,7 @@ fun HomeScreen(
                     start = layoutSpec.horizontalPadding,
                     top = layoutSpec.topPadding,
                     end = layoutSpec.horizontalPadding,
-                    bottom = layoutSpec.bottomPadding + 86.dp,
+                    bottom = layoutSpec.bottomPadding + if (showBottomControls) 86.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(layoutSpec.itemSpacing),
             ) {
@@ -491,40 +494,42 @@ fun HomeScreen(
                 }
             }
 
-            BottomHomeControls(
-                selectedSection = selectedSection,
-                onSectionSelected = {
-                    focusManager.clearFocus()
-                    selectedSection = it
-                    if (it != HomeSection.ReadLater) {
-                        readLaterFilter = ReadLaterFilter.All
-                    }
-                    searchQuery = ""
-                },
-                readingCount = uiState.readingItems.size,
-                historyCount = uiState.historyItems.size,
-                showAddSourceAction = showAddSourceFab,
-                onAddSource = {
-                    focusManager.clearFocus()
-                    coroutineScope.launch {
-                        val clipboardText = clipboard
-                            .getClipEntry()
-                            ?.clipData
-                            ?.takeIf { it.itemCount > 0 }
-                            ?.getItemAt(0)
-                            ?.coerceToText(context)
-                            ?.toString()
-                        addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
-                        addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
-                        showAddSourceSheet = true
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .imePadding(),
-            )
+            if (showBottomControls) {
+                BottomHomeControls(
+                    selectedSection = selectedSection,
+                    onSectionSelected = {
+                        focusManager.clearFocus()
+                        selectedSection = it
+                        if (it != HomeSection.ReadLater) {
+                            readLaterFilter = ReadLaterFilter.All
+                        }
+                        searchQuery = ""
+                    },
+                    readingCount = uiState.readingItems.size,
+                    historyCount = uiState.historyItems.size,
+                    showAddSourceAction = showAddSourceFab,
+                    onAddSource = {
+                        focusManager.clearFocus()
+                        coroutineScope.launch {
+                            val clipboardText = clipboard
+                                .getClipEntry()
+                                ?.clipData
+                                ?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)
+                                ?.coerceToText(context)
+                                ?.toString()
+                            addSourceInitialUrl = clipboardText?.takeIf { it.looksLikeUrl() }.orEmpty()
+                            addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
+                            showAddSourceSheet = true
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding(),
+                )
+            }
         }
     }
 
