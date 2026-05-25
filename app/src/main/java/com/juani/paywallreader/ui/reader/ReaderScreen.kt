@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -500,6 +501,7 @@ private fun ReaderFloatingToolbar(
                 ReaderRefreshFab(
                     isLoading = isLoading,
                     collapsed = !expanded,
+                    vertical = true,
                     onClick = {
                         if (expanded) {
                             onRefreshOrStop()
@@ -531,6 +533,7 @@ private fun ReaderFloatingToolbar(
                 onMarkRead = onMarkRead,
                 onShare = onShare,
                 onCollapse = { onExpandedChange(false) },
+                vertical = true,
                 archiveMode = archiveMode,
             )
         }
@@ -541,6 +544,7 @@ private fun ReaderFloatingToolbar(
                 ReaderRefreshFab(
                     isLoading = isLoading,
                     collapsed = !expanded,
+                    vertical = false,
                     onClick = {
                         if (expanded) {
                             onRefreshOrStop()
@@ -572,6 +576,7 @@ private fun ReaderFloatingToolbar(
                 onMarkRead = onMarkRead,
                 onShare = onShare,
                 onCollapse = { onExpandedChange(false) },
+                vertical = false,
                 archiveMode = archiveMode,
             )
         }
@@ -583,6 +588,7 @@ private fun ReaderFloatingToolbar(
 private fun ReaderRefreshFab(
     isLoading: Boolean,
     collapsed: Boolean = false,
+    vertical: Boolean = false,
     onClick: () -> Unit,
 ) {
     Box(
@@ -592,6 +598,7 @@ private fun ReaderRefreshFab(
         FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onClick) {
             Icon(
                 imageVector = when {
+                    collapsed && vertical -> Icons.Rounded.KeyboardArrowUp
                     collapsed -> Icons.AutoMirrored.Rounded.KeyboardArrowLeft
                     isLoading -> Icons.Rounded.Close
                     else -> Icons.Rounded.Refresh
@@ -626,6 +633,7 @@ private fun ReaderToolbarActions(
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
     onCollapse: () -> Unit,
+    vertical: Boolean,
     archiveMode: Boolean,
 ) {
     if (showBackButton) {
@@ -713,7 +721,11 @@ private fun ReaderToolbarActions(
     if (showCollapseAction) {
         IconButton(onClick = onCollapse, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
-                imageVector = Icons.Rounded.KeyboardArrowDown,
+                imageVector = if (vertical) {
+                    Icons.Rounded.KeyboardArrowDown
+                } else {
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight
+                },
                 contentDescription = stringResource(R.string.reader_collapse_toolbar),
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
