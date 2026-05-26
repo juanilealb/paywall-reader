@@ -159,29 +159,30 @@ fun ReaderScreen(
     var canNavigateBack by remember { mutableStateOf(false) }
     var canNavigateForward by remember { mutableStateOf(false) }
     var isAuthSurface by remember { mutableStateOf(false) }
-    var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim()) }
+    var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim().toPreferredReaderUrl()) }
     var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
     val initialUrl = remember(sourceUrl) {
-        sourceUrl.trim()
+        sourceUrl.trim().toPreferredReaderUrl()
     }
     val detectsAuthSurfaces = remember(initialUrl) {
         initialUrl.isBlogAuthHost()
     }
     var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl })))
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl }.toOriginalArticleUrl())))
     }
     val shareOriginal = {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, currentUrl.ifBlank { sourceUrl })
+            putExtra(Intent.EXTRA_TEXT, currentUrl.ifBlank { sourceUrl }.toOriginalArticleUrl())
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share)))
     }
     val openReaderVersion = {
         val url = webView?.url ?: currentUrl.ifBlank { sourceUrl }
         if (!url.isReaderServiceUrl()) {
-            webView?.loadArchiveSearch(url.toOriginalArticleUrl())
+            val originalUrl = url.toOriginalArticleUrl()
+            webView?.loadUrl(originalUrl.toPreferredReaderUrl(fallbackToOriginal = false))
         }
     }
     val saveCurrentForLater = {
@@ -334,6 +335,11 @@ fun ReaderScreen(
                                     val scheme = url.scheme
                                     if (scheme != "http" && scheme != "https") {
                                         context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                                        return true
+                                    }
+
+                                    if (url.isNewYorkTimesHost() && !url.isReaderServiceUrl()) {
+                                        view?.loadUrl(url.toPeriscopeUrl())
                                         return true
                                     }
 
@@ -729,12 +735,14 @@ private fun ReaderToolbarActions(
 }
 
 private const val REMOVE_PAYWALLS_HOST = "removepaywalls.com"
+private const val PERISCOPE_HOST = "periscope.corsfix.com"
 private const val ARTICLE_READER_HOST = "accessarticlenow.com"
 private const val UNWALL_HOST = "unwall.app"
 private const val ARCHIVE_FO_HOST = "archive.fo"
 
 private val ALLOWED_READER_HOSTS = setOf(
     REMOVE_PAYWALLS_HOST,
+    PERISCOPE_HOST,
     ARTICLE_READER_HOST,
     UNWALL_HOST,
     "archive.today",
@@ -779,6 +787,9 @@ private val BLOCKED_AD_PATH_PARTS = listOf(
 private fun Uri.toArticleReaderUrl(): String =
     "https://$ARTICLE_READER_HOST/api/c/full?q=${Uri.encode(toString())}"
 
+private fun Uri.toPeriscopeUrl(): String =
+    "https://$PERISCOPE_HOST/?url=${Uri.encode(toString())}"
+
 private fun Uri.toUnwallUrl(): String =
     "https://$UNWALL_HOST/${toString().removePrefix("https://").removePrefix("http://")}?reader=1"
 
@@ -801,6 +812,17 @@ private fun String.toOriginalArticleUrl(): String =
 private fun String.toArchiveSearchUrl(): String =
     "https://archive.ph/search/?q=${Uri.encode(this)}"
 
+private fun String.toPreferredReaderUrl(fallbackToOriginal: Boolean = true): String =
+    runCatching {
+        val uri = Uri.parse(this)
+        when {
+            uri.isReaderServiceUrl() -> this
+            uri.isNewYorkTimesHost() -> uri.toPeriscopeUrl()
+            fallbackToOriginal -> this
+            else -> toArchiveSearchUrl()
+        }
+    }.getOrDefault(this)
+
 private fun String.isLikelyWebUrl(): Boolean =
     runCatching {
         val uri = Uri.parse(this)
@@ -820,8 +842,14 @@ private fun Uri.isPaywallFallbackHost(): Boolean {
     return PAYWALL_FALLBACK_HOSTS.any { normalizedHost == it || normalizedHost.endsWith(".$it") }
 }
 
+private fun Uri.isNewYorkTimesHost(): Boolean {
+    val normalizedHost = host?.removePrefix("www.") ?: return false
+    return normalizedHost == "nytimes.com" || normalizedHost.endsWith(".nytimes.com")
+}
+
 private fun Uri.readerOriginalUrl(): String? {
     return when (host) {
+        PERISCOPE_HOST -> getQueryParameter("url")
         ARTICLE_READER_HOST -> getQueryParameter("q")
         UNWALL_HOST -> {
             val pathUrl = toString()
