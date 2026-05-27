@@ -85,6 +85,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
 import com.juani.paywallreader.data.reader.ARCHIVE_FO_HOST
 import com.juani.paywallreader.data.reader.UNWALL_HOST
@@ -130,6 +132,7 @@ fun ReaderRoute(
         onBack = onBack,
         showBackButton = showBackButton,
         onSaveForLater = viewModel::saveForLater,
+        onCaptureStatusChange = viewModel::updateCaptureStatus,
         onMarkRead = viewModel::markRead,
         onRecordVisit = viewModel::recordVisit,
         modifier = modifier,
@@ -165,6 +168,7 @@ fun ReaderScreen(
         markdown: String?,
         imageUrl: String?,
     ) -> Unit,
+    onCaptureStatusChange: (url: String, status: String) -> Unit = { _, _ -> },
     onMarkRead: (url: String) -> Unit,
     onRecordVisit: (title: String, url: String, sourceName: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -198,6 +202,7 @@ fun ReaderScreen(
     var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim().toPreferredReaderUrl()) }
     var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
     var autoCaptureCompleted by rememberSaveable(sourceUrl, autoCaptureUrl) { mutableStateOf(false) }
+    var autoCaptureCallbackFinished by rememberSaveable(sourceUrl, autoCaptureUrl) { mutableStateOf(false) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim().toPreferredReaderUrl()
     }
@@ -383,9 +388,28 @@ fun ReaderScreen(
                                 }
                                 if (autoCaptureUrl != null && !autoCaptureCompleted) {
                                     autoCaptureCompleted = true
+                                    autoCaptureCallbackFinished = false
+                                    val originalCaptureUrl = (url ?: view?.url ?: currentUrl).toOriginalArticleUrl()
+                                    onCaptureStatusChange(originalCaptureUrl, CAPTURE_STATUS_CAPTURING)
                                     view?.postDelayed(
-                                        { captureCurrentForLater(onCaptured = onAutoCaptureComplete) },
+                                        {
+                                            captureCurrentForLater(
+                                                onCaptured = {
+                                                    autoCaptureCallbackFinished = true
+                                                    onAutoCaptureComplete()
+                                                },
+                                            )
+                                        },
                                         1_200L,
+                                    )
+                                    view?.postDelayed(
+                                        {
+                                            if (!autoCaptureCallbackFinished) {
+                                                onCaptureStatusChange(originalCaptureUrl, CAPTURE_STATUS_FAILED)
+                                                onAutoCaptureComplete()
+                                            }
+                                        },
+                                        12_000L,
                                     )
                                 }
                                 val originalUrl = currentUrl.toOriginalArticleUrl()

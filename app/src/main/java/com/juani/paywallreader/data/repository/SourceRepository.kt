@@ -5,6 +5,10 @@ import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_READY
 import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
@@ -145,7 +149,7 @@ class SourceRepository(
                 isArchived = false,
                 archivedAt = null,
                 updatedAt = now,
-                captureStatus = "ready",
+                captureStatus = CAPTURE_STATUS_READY,
             ),
         )
     }
@@ -178,8 +182,25 @@ class SourceRepository(
                 addedAt = now,
                 folderName = normalizedFolderName,
                 updatedAt = now,
-                captureStatus = "pending",
+                captureStatus = CAPTURE_STATUS_PENDING,
             ),
+        )
+    }
+
+    suspend fun updateCaptureStatus(url: String, status: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (!validatedUrl.isValid) return
+        val safeStatus = when (status) {
+            CAPTURE_STATUS_PENDING,
+            CAPTURE_STATUS_CAPTURING,
+            CAPTURE_STATUS_READY,
+            CAPTURE_STATUS_FAILED -> status
+            else -> CAPTURE_STATUS_PENDING
+        }
+        sourceDao.updateReadingItemCaptureStatus(
+            url = validatedUrl.normalizedUrl,
+            status = safeStatus,
+            updatedAt = System.currentTimeMillis(),
         )
     }
 

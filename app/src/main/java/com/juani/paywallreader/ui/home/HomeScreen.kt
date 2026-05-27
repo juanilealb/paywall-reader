@@ -90,6 +90,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.juani.paywallreader.R
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_READY
 import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
@@ -127,6 +131,7 @@ fun HomeRoute(
         if (url != null && url != consumedSharedUrl) {
             consumedSharedUrl = url
             if (onSharedUrlOpen != null) {
+                viewModel.markSharedUrlPending(url)
                 onSharedUrlOpen(url)
                 Toast.makeText(context, "Abriendo y guardando para leer después", Toast.LENGTH_SHORT).show()
             } else {
@@ -141,15 +146,20 @@ fun HomeRoute(
         uiState = uiState,
         onSourceClick = onSourceClick,
         onReadingItemClick = { item ->
-            onSourceClick(
-                Source(
-                    id = -item.id,
-                    name = item.title,
-                    url = item.url,
-                    isDefault = false,
-                    folderName = readLaterLabel,
-                ),
-            )
+            if (item.captureStatus != CAPTURE_STATUS_READY && onSharedUrlOpen != null) {
+                viewModel.markSharedUrlPending(item.url)
+                onSharedUrlOpen(item.url)
+            } else {
+                onSourceClick(
+                    Source(
+                        id = -item.id,
+                        name = item.title,
+                        url = item.url,
+                        isDefault = false,
+                        folderName = readLaterLabel,
+                    ),
+                )
+            }
         },
         onHistoryItemClick = { item ->
             onSourceClick(
@@ -1192,6 +1202,15 @@ private fun ReadLaterHero(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
                     maxLines = 1,
                 )
+                item.captureStatus.toCaptureStatusLabel()?.let { statusLabel ->
+                    Text(
+                        text = "· $statusLabel",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (item.folderName != UNFILED_FOLDER_NAME) {
                     Text(
                         text = "· ${item.folderName}",
@@ -1318,10 +1337,19 @@ private fun ReadingListItem(
 
 private fun ReadingItem.readingMetadataLabel(): String =
     listOfNotNull(
+        captureStatus.toCaptureStatusLabel(),
         sourceName.ifBlank { url.toDisplayHost() },
         url.toDisplayHost(),
         folderName.takeIf { it != UNFILED_FOLDER_NAME },
     ).joinToString(" · ")
+
+private fun String.toCaptureStatusLabel(): String? =
+    when (this) {
+        CAPTURE_STATUS_PENDING -> "Pendiente de captura"
+        CAPTURE_STATUS_CAPTURING -> "Capturando"
+        CAPTURE_STATUS_FAILED -> "Captura pendiente de reintento"
+        else -> null
+    }
 
 @Composable
 private fun HistoryListItem(

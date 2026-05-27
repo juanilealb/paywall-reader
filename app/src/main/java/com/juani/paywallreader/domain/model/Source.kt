@@ -1,6 +1,10 @@
 package com.juani.paywallreader.domain.model
 
 const val UNFILED_FOLDER_NAME = "Sin carpeta"
+const val CAPTURE_STATUS_PENDING = "pending"
+const val CAPTURE_STATUS_CAPTURING = "capturing"
+const val CAPTURE_STATUS_READY = "ready"
+const val CAPTURE_STATUS_FAILED = "failed"
 
 data class Source(
     val id: Long,

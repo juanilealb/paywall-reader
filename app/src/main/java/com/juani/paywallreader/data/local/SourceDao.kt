@@ -69,6 +69,9 @@ interface SourceDao {
     @Query("UPDATE reading_items SET folderName = :folderName, updatedAt = :updatedAt WHERE url = :url")
     suspend fun moveReadingItemToFolder(url: String, folderName: String, updatedAt: Long)
 
+    @Query("UPDATE reading_items SET captureStatus = :status, updatedAt = :updatedAt WHERE url = :url")
+    suspend fun updateReadingItemCaptureStatus(url: String, status: String, updatedAt: Long)
+
     @Query("DELETE FROM reading_items WHERE url = :url")
     suspend fun deleteReadingItem(url: String)
 
