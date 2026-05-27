@@ -142,6 +142,30 @@ fun HomeRoute(
     var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
     var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
+    var showReaderMoveBookmarkDialog by rememberSaveable { mutableStateOf(false) }
+    var readerMoveBookmarkNewFolder by rememberSaveable { mutableStateOf("") }
+    val readerFolders = remember(uiState.folders, uiState.readingItems) {
+        val hasUnfiledItems = uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
+        (listOf(UNFILED_FOLDER_NAME) + uiState.folders + uiState.readingItems.map { it.folderName })
+            .distinct()
+            .filter { it.isNotBlank() }
+            .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
+            .sortedBy { it.lowercase() }
+    }
+
+    fun nextReadableAfter(current: ReadingItem): ReadingItem? {
+        val currentIndex = uiState.readingItems.indexOfFirst { it.url == current.url }
+        val candidates = uiState.readingItems
+            .mapIndexed { index, readingItem -> index to readingItem }
+            .filter { (_, readingItem) ->
+                readingItem.url != current.url &&
+                    !readingItem.isRead &&
+                    readingItem.captureStatus == CAPTURE_STATUS_READY &&
+                    readingItem.hasCapturedBody()
+            }
+        return candidates.firstOrNull { (index, _) -> currentIndex >= 0 && index > currentIndex }?.second
+            ?: candidates.firstOrNull()?.second
+    }
 
     LaunchedEffect(pendingSharedUrl) {
         val decision = ExternalShareRoutePolicy.decide(pendingSharedUrl)
@@ -232,9 +256,40 @@ fun HomeRoute(
             },
             onMarkRead = {
                 viewModel.markRead(item.url)
-                cachedArticleToRead = null
+                cachedArticleToRead = nextReadableAfter(item)
             },
+            onArchiveAndNext = {
+                viewModel.archiveBookmark(item.url)
+                cachedArticleToRead = nextReadableAfter(item)
+            },
+            onMoveToFolderAndNext = {
+                readerMoveBookmarkNewFolder = ""
+                showReaderMoveBookmarkDialog = true
+            },
+            onExitToMenu = { cachedArticleToRead = null },
         )
+    }
+
+    if (showReaderMoveBookmarkDialog) {
+        val item = cachedArticleToRead
+        if (item != null) {
+            MoveBookmarkDialog(
+                item = item,
+                folders = readerFolders,
+                newFolderName = readerMoveBookmarkNewFolder,
+                onNewFolderNameChange = { readerMoveBookmarkNewFolder = it },
+                onMove = { folderName ->
+                    viewModel.moveBookmarkToFolder(item.url, folderName)
+                    Toast.makeText(context, "Movido a $folderName", Toast.LENGTH_SHORT).show()
+                    showReaderMoveBookmarkDialog = false
+                    readerMoveBookmarkNewFolder = ""
+                    cachedArticleToRead = nextReadableAfter(item)
+                },
+                onDismiss = { showReaderMoveBookmarkDialog = false },
+            )
+        } else {
+            showReaderMoveBookmarkDialog = false
+        }
     }
 }
 

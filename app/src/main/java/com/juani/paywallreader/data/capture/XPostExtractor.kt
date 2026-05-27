@@ -13,39 +13,38 @@ import java.util.Locale
 object XPostExtractor {
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 18_000
+    private const val MAX_REDIRECTS = 6
     private val X_HOSTS = setOf("x.com", "twitter.com")
     private val MOBILE_X_HOSTS = setOf("mobile.x.com", "mobile.twitter.com")
+    private val SHORT_LINK_HOSTS = setOf("t.co")
+    private val NON_ARTICLE_HOSTS = X_HOSTS + MOBILE_X_HOSTS + SHORT_LINK_HOSTS + setOf("pic.twitter.com")
     private val json = Json { ignoreUnknownKeys = true }
 
     fun canHandle(url: String): Boolean = parseTweetUrl(url) != null
 
     fun fetch(url: String): CapturedArticle {
         val tweetUrl = parseTweetUrl(url)?.canonicalUrl ?: error("No es un enlace de post de X")
-        val oEmbedUrl = "https://publish.twitter.com/oembed?omit_script=1&dnt=1&url=" +
-            URLEncoder.encode(tweetUrl, StandardCharsets.UTF_8.name())
-        val connection = (URL(oEmbedUrl).openConnection() as HttpURLConnection).apply {
-            instanceFollowRedirects = true
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 PaywallReader/1.0",
-            )
-            setRequestProperty("Accept", "application/json")
-        }
-        return try {
-            val responseCode = connection.responseCode
-            if (responseCode !in 200..399) {
-                error("X oEmbed HTTP $responseCode")
+        val jsonPayload = fetchOEmbedJson(tweetUrl)
+        val tweetArticle = fromOEmbedJson(
+            requestedUrl = url,
+            resolvedUrl = tweetUrl,
+            jsonPayload = jsonPayload,
+        )
+        val externalArticleUrl = extractExternalArticleUrl(tweetArticle.html.orEmpty())
+        if (externalArticleUrl != null) {
+            val externalArticle = runCatching { BackgroundArticleExtractor.fetch(externalArticleUrl) }.getOrNull()
+            if (externalArticle != null && externalArticle.text.isNotBlank()) {
+                return externalArticle.copy(
+                    requestedUrl = url,
+                    markdown = buildString {
+                        append(externalArticle.markdown)
+                        append("\n\n---\n")
+                        append("Guardado desde X: ").append(tweetUrl)
+                    }.trim(),
+                )
             }
-            fromOEmbedJson(
-                requestedUrl = url,
-                resolvedUrl = tweetUrl,
-                jsonPayload = connection.inputStream.bufferedReader().use { it.readText() },
-            )
-        } finally {
-            connection.disconnect()
         }
+        return tweetArticle
     }
 
     fun fromOEmbedJson(
@@ -87,6 +86,76 @@ object XPostExtractor {
             markdown = markdown,
             imageUrl = null,
         )
+    }
+
+    internal fun externalLinksFromOEmbedHtml(html: String): List<String> =
+        Regex("(?is)<a\\b[^>]*\\bhref=[\\\"']([^\\\"']+)[\\\"'][^>]*>")
+            .findAll(html)
+            .mapNotNull { match -> match.groupValues.getOrNull(1)?.decodeHtml()?.trim() }
+            .filter { it.startsWith("http://") || it.startsWith("https://") }
+            .filter { !isXChromeHost(it) }
+            .distinct()
+            .toList()
+
+    private fun fetchOEmbedJson(tweetUrl: String): String {
+        val oEmbedUrl = "https://publish.twitter.com/oembed?omit_script=1&dnt=1&url=" +
+            URLEncoder.encode(tweetUrl, StandardCharsets.UTF_8.name())
+        val connection = (URL(oEmbedUrl).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 PaywallReader/1.0",
+            )
+            setRequestProperty("Accept", "application/json")
+        }
+        return try {
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..399) {
+                error("X oEmbed HTTP $responseCode")
+            }
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun extractExternalArticleUrl(html: String): String? =
+        externalLinksFromOEmbedHtml(html)
+            .asSequence()
+            .map { link -> if (isShortLinkHost(link)) resolveRedirects(link) else link }
+            .firstOrNull { !isNonArticleHost(it) }
+
+    private fun resolveRedirects(url: String): String {
+        var currentUrl = url
+        repeat(MAX_REDIRECTS) {
+            val connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                requestMethod = "HEAD"
+                setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 PaywallReader/1.0",
+                )
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            }
+            try {
+                val responseCode = connection.responseCode
+                val location = connection.getHeaderField("Location")
+                if (responseCode in 300..399 && !location.isNullOrBlank()) {
+                    currentUrl = URL(URL(currentUrl), location).toString()
+                } else {
+                    return currentUrl
+                }
+            } catch (_: Throwable) {
+                return currentUrl
+            } finally {
+                connection.disconnect()
+            }
+        }
+        return currentUrl
     }
 
     private fun extractTweetText(html: String): String {
@@ -131,6 +200,19 @@ object XPostExtractor {
             else -> normalizedHost
         }
     }
+
+    private fun isShortLinkHost(url: String): Boolean =
+        normalizedHost(url) in SHORT_LINK_HOSTS
+
+    private fun isXChromeHost(url: String): Boolean =
+        normalizedHost(url) in X_HOSTS || normalizedHost(url) in MOBILE_X_HOSTS || normalizedHost(url) == "pic.twitter.com"
+
+    private fun isNonArticleHost(url: String): Boolean =
+        normalizedHost(url) in NON_ARTICLE_HOSTS
+
+    private fun normalizedHost(url: String): String? = runCatching {
+        URI(url.trim()).host?.lowercase(Locale.US)?.removePrefix("www.")
+    }.getOrNull()
 
     private fun String.toPlainText(): String =
         replace(Regex("(?is)<br\\s*/?>"), "\n")
