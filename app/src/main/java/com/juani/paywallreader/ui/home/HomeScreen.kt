@@ -107,6 +107,7 @@ import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
+import com.juani.paywallreader.data.reader.toPreferredReaderUrl
 import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
@@ -162,7 +163,7 @@ fun HomeRoute(
                     Source(
                         id = -item.id,
                         name = item.title,
-                        url = item.url,
+                        url = item.url.toPreferredReaderUrl(fallbackToOriginal = false),
                         isDefault = false,
                         folderName = readLaterLabel,
                     ),
@@ -213,7 +214,7 @@ fun HomeRoute(
                     Source(
                         id = -item.id,
                         name = item.title,
-                        url = item.url,
+                        url = item.url.toPreferredReaderUrl(fallbackToOriginal = false),
                         isDefault = false,
                         folderName = readLaterLabel,
                     ),
@@ -272,7 +273,6 @@ fun HomeScreen(
     var newFolderName by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
-    var readLaterFilter by rememberSaveable { mutableStateOf(ReadLaterFilter.All) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
@@ -315,6 +315,13 @@ fun HomeScreen(
             .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
             .sortedBy { it.lowercase() }
     }
+    val readingFolders = remember(uiState.folders, uiState.readingItems) {
+        val hasUnfiledItems = uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
+        (uiState.folders + uiState.readingItems.map { it.folderName })
+            .distinct()
+            .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
+            .sortedBy { it.lowercase() }
+    }
     val normalizedSearch = searchQuery.trim()
     val visibleSources = remember(uiState.sources, selectedFolder, normalizedSearch) {
         uiState.sources
@@ -327,11 +334,16 @@ fun HomeScreen(
             }
             .toList()
     }
-    val visibleReadingItems = remember(uiState.readingItems, selectedFolder, normalizedSearch, readLaterFilter) {
+    val visibleReadingItems = remember(uiState.readingItems, selectedFolder, normalizedSearch) {
         uiState.readingItems
             .asSequence()
-            .filter { item -> selectedFolder == null || item.folderName == selectedFolder }
-            .filter { item -> readLaterFilter.matches(item) }
+            .filter { item ->
+                if (selectedFolder == null) {
+                    !item.isRead
+                } else {
+                    item.folderName == selectedFolder
+                }
+            }
             .filter { item ->
                 normalizedSearch.isBlank() ||
                     item.title.contains(normalizedSearch, ignoreCase = true) ||
@@ -363,7 +375,7 @@ fun HomeScreen(
     LaunchedEffect(openReadLaterRequest) {
         if (openReadLaterRequest > 0) {
             selectedSection = HomeSection.ReadLater
-            readLaterFilter = ReadLaterFilter.All
+            selectedFolder = null
             searchQuery = ""
         }
     }
@@ -503,25 +515,17 @@ fun HomeScreen(
                     }
 
                     HomeSection.ReadLater -> {
-                        if (folders.isNotEmpty()) {
+                        if (readingFolders.isNotEmpty() || uiState.readingItems.isNotEmpty()) {
                             item {
                                 FolderChips(
-                                    folders = folders,
+                                    folders = readingFolders,
                                     selectedFolder = selectedFolder,
+                                    allLabel = "Inbox",
                                     onFolderSelected = { selectedFolder = it },
                                     onNewFolder = {
                                         newFolderName = ""
                                         showNewFolderDialog = true
                                     },
-                                )
-                            }
-                        }
-
-                        if (uiState.readingItems.isNotEmpty()) {
-                            item {
-                                ReadLaterFilterChips(
-                                    selectedFilter = readLaterFilter,
-                                    onFilterSelected = { readLaterFilter = it },
                                 )
                             }
                         }
@@ -552,49 +556,22 @@ fun HomeScreen(
                         } else {
                             item {
                                 SectionHeader(
-                                    title = selectedFolder ?: stringResource(R.string.latest_saved),
-                                    count = 1,
+                                    title = selectedFolder ?: "Inbox",
+                                    count = visibleReadingItems.size,
                                 )
                             }
                             item {
-                                val heroItem = visibleReadingItems.first()
-                                SwipeableReadingItem(
-                                    item = heroItem,
-                                    onArchive = { archiveWithUndo(heroItem) },
-                                    onToggleRead = { toggleReadWithUndo(heroItem) },
-                                ) {
-                                    ReadLaterHero(
-                                        item = heroItem,
-                                        onClick = {
-                                            focusManager.clearFocus()
-                                            onReadingItemClick(heroItem)
-                                        },
-                                        onMarkRead = { onMarkRead(heroItem.url) },
-                                        onRetryCapture = { onRetryCapture(heroItem) },
-                                    )
-                                }
-                            }
-                            val rest = visibleReadingItems.drop(1)
-                            if (rest.isNotEmpty()) {
-                                item {
-                                    SectionHeader(
-                                        title = stringResource(R.string.more_articles),
-                                        count = rest.size,
-                                    )
-                                }
-                                item {
-                                    ReadingListGroup(
-                                        items = rest,
-                                        onItemClick = {
-                                            focusManager.clearFocus()
-                                            onReadingItemClick(it)
-                                        },
-                                        onMarkRead = { item -> onMarkRead(item.url) },
-                                        onArchive = { item -> archiveWithUndo(item) },
-                                        onToggleRead = { item -> toggleReadWithUndo(item) },
-                                        onRetryCapture = onRetryCapture,
-                                    )
-                                }
+                                ReadingListGroup(
+                                    items = visibleReadingItems,
+                                    onItemClick = {
+                                        focusManager.clearFocus()
+                                        onReadingItemClick(it)
+                                    },
+                                    onMarkRead = { item -> onMarkRead(item.url) },
+                                    onArchive = { item -> archiveWithUndo(item) },
+                                    onToggleRead = { item -> toggleReadWithUndo(item) },
+                                    onRetryCapture = onRetryCapture,
+                                )
                             }
                         }
                     }
@@ -640,9 +617,6 @@ fun HomeScreen(
                     onSectionSelected = {
                         focusManager.clearFocus()
                         selectedSection = it
-                        if (it != HomeSection.ReadLater) {
-                            readLaterFilter = ReadLaterFilter.All
-                        }
                         searchQuery = ""
                     },
                     readingCount = uiState.readingItems.size,
@@ -899,19 +873,6 @@ private enum class HomeSection(
         }
 }
 
-private enum class ReadLaterFilter(
-    val label: String,
-) {
-    All("Todo"),
-    Today("De hoy");
-
-    fun matches(item: ReadingItem): Boolean =
-        when (this) {
-            All -> true
-            Today -> item.addedAt >= Calendar.getInstance().startOfDayMillis()
-        }
-}
-
 @Composable
 private fun SectionSelector(
     selectedSection: HomeSection,
@@ -1020,26 +981,6 @@ private fun SectionSelectorItem(
 }
 
 @Composable
-private fun ReadLaterFilterChips(
-    selectedFilter: ReadLaterFilter,
-    onFilterSelected: (ReadLaterFilter) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(items = ReadLaterFilter.entries.toList(), key = { it.name }) { filter ->
-            FilterChip(
-                selected = selectedFilter == filter,
-                onClick = { onFilterSelected(filter) },
-                label = { Text(filter.label) },
-            )
-        }
-    }
-}
-
-@Composable
 private fun SearchPill(
     value: String,
     onValueChange: (String) -> Unit,
@@ -1132,6 +1073,7 @@ private fun FolderChips(
     onFolderSelected: (String?) -> Unit,
     onNewFolder: () -> Unit,
     modifier: Modifier = Modifier,
+    allLabel: String = stringResource(R.string.all_sources),
 ) {
     LazyRow(
         modifier = modifier.fillMaxWidth(),
@@ -1141,7 +1083,7 @@ private fun FolderChips(
             FilterChip(
                 selected = selectedFolder == null,
                 onClick = { onFolderSelected(null) },
-                label = { Text(stringResource(R.string.all_sources)) },
+                label = { Text(allLabel) },
             )
         }
         items(folders, key = { it }) { folder ->
