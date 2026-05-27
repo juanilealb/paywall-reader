@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Newspaper
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
@@ -102,7 +103,6 @@ import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
-import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
 import kotlinx.coroutines.launch
@@ -126,7 +126,6 @@ fun HomeRoute(
     val context = LocalContext.current
     var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
-    var pendingHeadlessCaptureUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
 
     LaunchedEffect(pendingSharedUrl) {
@@ -135,9 +134,8 @@ fun HomeRoute(
         if (url != null && url != consumedSharedUrl) {
             consumedSharedUrl = url
             viewModel.markSharedUrlPending(url)
-            pendingHeadlessCaptureUrl = url
             openReadLaterRequest++
-            Toast.makeText(context, "Guardando lectura en segundo plano", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Agregado a la cola de captura", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -146,10 +144,9 @@ fun HomeRoute(
         onSourceClick = onSourceClick,
         onReadingItemClick = { item ->
             if (item.captureStatus != CAPTURE_STATUS_READY) {
-                viewModel.markSharedUrlPending(item.url)
-                pendingHeadlessCaptureUrl = item.url
+                viewModel.retryCapture(item.url)
                 openReadLaterRequest++
-                Toast.makeText(context, "Reintentando captura en segundo plano", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Reintentando extracción en background", Toast.LENGTH_SHORT).show()
             } else if (item.hasCapturedBody()) {
                 cachedArticleToRead = item
             } else {
@@ -178,6 +175,10 @@ fun HomeRoute(
         onAddSource = viewModel::addSource,
         onDeleteSource = viewModel::deleteSource,
         onMarkRead = viewModel::markRead,
+        onRetryCapture = { item ->
+            viewModel.retryCapture(item.url)
+            Toast.makeText(context, "Reintento agregado a la cola", Toast.LENGTH_SHORT).show()
+        },
         onClearHistory = viewModel::clearHistory,
         onCreateFolder = viewModel::createFolder,
         onDeleteFolder = viewModel::deleteFolder,
@@ -189,19 +190,6 @@ fun HomeRoute(
         showAddSourceFab = showAddSourceFab,
         showBottomControls = showBottomControls,
         modifier = modifier,
-    )
-
-    HeadlessArticleCaptureHost(
-        captureUrl = pendingHeadlessCaptureUrl,
-        onSaveForLater = viewModel::saveForLater,
-        onCaptureStatusChange = viewModel::updateCaptureStatus,
-        onCaptureComplete = { completedUrl ->
-            if (pendingHeadlessCaptureUrl == completedUrl) {
-                pendingHeadlessCaptureUrl = null
-            } else if (pendingHeadlessCaptureUrl?.trim() == completedUrl.trim()) {
-                pendingHeadlessCaptureUrl = null
-            }
-        },
     )
 
     cachedArticleToRead?.let { item ->
@@ -246,6 +234,7 @@ fun HomeScreen(
     onAddSource: (name: String, url: String, folderName: String) -> Unit,
     onDeleteSource: (Source) -> Unit,
     onMarkRead: (String) -> Unit,
+    onRetryCapture: (ReadingItem) -> Unit,
     onClearHistory: () -> Unit,
     onCreateFolder: (String) -> Unit,
     onDeleteFolder: (String) -> Unit,
@@ -531,6 +520,7 @@ fun HomeScreen(
                                         onReadingItemClick(visibleReadingItems.first())
                                     },
                                     onMarkRead = { onMarkRead(visibleReadingItems.first().url) },
+                                    onRetryCapture = { onRetryCapture(visibleReadingItems.first()) },
                                 )
                             }
                             val rest = visibleReadingItems.drop(1)
@@ -549,6 +539,7 @@ fun HomeScreen(
                                             onReadingItemClick(it)
                                         },
                                         onMarkRead = { item -> onMarkRead(item.url) },
+                                        onRetryCapture = onRetryCapture,
                                     )
                                 }
                             }
@@ -1185,6 +1176,7 @@ private fun ReadLaterHero(
     item: ReadingItem,
     onClick: () -> Unit,
     onMarkRead: () -> Unit,
+    onRetryCapture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ElevatedCard(
@@ -1259,14 +1251,15 @@ private fun ReadLaterHero(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (item.folderName != UNFILED_FOLDER_NAME) {
-                    Text(
-                        text = "· ${item.folderName}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                if (item.captureStatus == CAPTURE_STATUS_FAILED) {
+                    TextButton(onClick = onRetryCapture) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text("Reintentar extracción")
+                    }
                 }
             }
         }
@@ -1278,6 +1271,7 @@ private fun ReadingListGroup(
     items: List<ReadingItem>,
     onItemClick: (ReadingItem) -> Unit,
     onMarkRead: (ReadingItem) -> Unit,
+    onRetryCapture: (ReadingItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     GroupedListSurface(modifier = modifier) {
@@ -1286,6 +1280,7 @@ private fun ReadingListGroup(
                 item = item,
                 onClick = { onItemClick(item) },
                 onMarkRead = { onMarkRead(item) },
+                onRetryCapture = { onRetryCapture(item) },
             )
             if (index < items.lastIndex) {
                 GroupDivider()
@@ -1341,6 +1336,7 @@ private fun ReadingListItem(
     item: ReadingItem,
     onClick: () -> Unit,
     onMarkRead: () -> Unit,
+    onRetryCapture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ListItem(
@@ -1368,6 +1364,14 @@ private fun ReadingListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+                if (item.captureStatus == CAPTURE_STATUS_FAILED) {
+                    IconButton(onClick = onRetryCapture) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "Reintentar extracción",
+                        )
+                    }
+                }
                 IconButton(onClick = onMarkRead) {
                     Icon(
                         imageVector = Icons.Rounded.Check,
@@ -1393,9 +1397,9 @@ private fun ReadingItem.readingMetadataLabel(): String =
 
 private fun String.toCaptureStatusLabel(): String? =
     when (this) {
-        CAPTURE_STATUS_PENDING -> "Pendiente de captura"
-        CAPTURE_STATUS_CAPTURING -> "Capturando"
-        CAPTURE_STATUS_FAILED -> "Captura pendiente de reintento"
+        CAPTURE_STATUS_PENDING -> "En cola"
+        CAPTURE_STATUS_CAPTURING -> "Capturando en background"
+        CAPTURE_STATUS_FAILED -> "Falló · tocar Reintentar extracción"
         else -> null
     }
 
@@ -1651,6 +1655,7 @@ private fun HomeScreenPreview() {
             onAddSource = { _, _, _ -> },
             onDeleteSource = {},
             onMarkRead = {},
+            onRetryCapture = {},
             onClearHistory = {},
             onCreateFolder = {},
             onDeleteFolder = {},

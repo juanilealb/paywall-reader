@@ -3,6 +3,7 @@ package com.juani.paywallreader.ui.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.juani.paywallreader.data.capture.CaptureWorkManager
 import com.juani.paywallreader.data.local.AppDatabase
 import com.juani.paywallreader.data.repository.SourceRepository
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
@@ -105,6 +106,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun saveSharedUrl(url: String) {
         viewModelScope.launch {
             repository.saveBookmarkFromExternalShare(url)
+            CaptureWorkManager.enqueue(getApplication(), url)
         }
     }
 
@@ -112,6 +114,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.saveBookmarkFromExternalShare(url)
             repository.updateCaptureStatus(url, CAPTURE_STATUS_PENDING)
+            CaptureWorkManager.enqueue(getApplication(), url)
+        }
+    }
+
+    fun retryCapture(url: String) {
+        viewModelScope.launch {
+            repository.saveBookmarkFromExternalShare(url)
+            repository.updateCaptureStatus(url, CAPTURE_STATUS_PENDING)
+            CaptureWorkManager.enqueue(getApplication(), url)
         }
     }
 
