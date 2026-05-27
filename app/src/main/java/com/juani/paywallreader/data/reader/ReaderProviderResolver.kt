@@ -15,6 +15,7 @@ const val CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW = "access_article_now"
 const val CAPTURE_PROVIDER_UNWALL = "unwall"
 const val CAPTURE_PROVIDER_ARCHIVE = "archive"
 const val CAPTURE_PROVIDER_REMOVE_PAYWALLS = "remove_paywalls"
+const val CAPTURE_PROVIDER_X = "x"
 
 val ALLOWED_READER_HOSTS = setOf(
     REMOVE_PAYWALLS_HOST,
@@ -73,6 +74,7 @@ private fun String?.captureProviderKeyForHost(): String = when (this) {
     UNWALL_HOST -> CAPTURE_PROVIDER_UNWALL
     REMOVE_PAYWALLS_HOST -> CAPTURE_PROVIDER_REMOVE_PAYWALLS
     ARCHIVE_FO_HOST, "archive.today", "archive.is", "archive.ph" -> CAPTURE_PROVIDER_ARCHIVE
+    "x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com" -> CAPTURE_PROVIDER_X
     else -> CAPTURE_PROVIDER_ORIGINAL
 }
 
@@ -82,6 +84,7 @@ fun String.captureProviderLabel(): String = when (this) {
     CAPTURE_PROVIDER_UNWALL -> "Unwall"
     CAPTURE_PROVIDER_ARCHIVE -> "Archive"
     CAPTURE_PROVIDER_REMOVE_PAYWALLS -> "RemovePaywalls"
+    CAPTURE_PROVIDER_X -> "X"
     else -> "Original"
 }
 

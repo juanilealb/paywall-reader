@@ -10,6 +10,10 @@ object BackgroundArticleExtractor {
     private const val MAX_HTML_CHARS = 1_200_000
 
     fun fetch(url: String): CapturedArticle {
+        if (XPostExtractor.canHandle(url)) {
+            return XPostExtractor.fetch(url)
+        }
+
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             instanceFollowRedirects = true
             connectTimeout = CONNECT_TIMEOUT_MS
