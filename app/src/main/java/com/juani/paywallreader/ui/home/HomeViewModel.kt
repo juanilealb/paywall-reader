@@ -131,6 +131,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun moveBookmarkToFolder(url: String, folderName: String) {
+        viewModelScope.launch {
+            repository.moveBookmarkToFolder(url, folderName)
+        }
+    }
+
     fun saveSharedUrl(url: String) {
         viewModelScope.launch {
             repository.saveBookmarkFromExternalShare(url)
