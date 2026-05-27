@@ -16,6 +16,14 @@ data class ReadingItem(
     val url: String,
     val sourceName: String,
     val addedAt: Long,
+    val resolvedUrl: String? = null,
+    val author: String? = null,
+    val excerpt: String? = null,
+    val html: String? = null,
+    val text: String? = null,
+    val markdown: String? = null,
+    val imageUrl: String? = null,
+    val readingProgress: Float = 0f,
 )
 
 data class HistoryItem(
