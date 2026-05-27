@@ -13,8 +13,8 @@ android {
         applicationId = "com.juani.paywallreader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0-update9"
+        versionCode = 10
+        versionName = "1.0-update10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -82,6 +82,9 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
+    // Background capture queue
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
 
     // JSON serialization (for default sources)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")

@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -35,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .addCallback(DefaultSourcesCallback())
                 .build()
@@ -149,6 +150,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN archivedAt INTEGER")
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN captureStatus TEXT NOT NULL DEFAULT 'ready'")
+            }
+        }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN captureAttemptCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN captureLastAttemptAt INTEGER")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN captureLastError TEXT")
             }
         }
     }

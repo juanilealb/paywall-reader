@@ -30,4 +30,7 @@ data class ReadingItemEntity(
     val archivedAt: Long? = null,
     val updatedAt: Long = 0,
     val captureStatus: String = "ready",
+    val captureAttemptCount: Int = 0,
+    val captureLastAttemptAt: Long? = null,
+    val captureLastError: String? = null,
 )

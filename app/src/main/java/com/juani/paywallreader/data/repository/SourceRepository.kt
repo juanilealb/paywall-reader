@@ -150,6 +150,9 @@ class SourceRepository(
                 archivedAt = null,
                 updatedAt = now,
                 captureStatus = CAPTURE_STATUS_READY,
+                captureAttemptCount = existing?.captureAttemptCount ?: 0,
+                captureLastAttemptAt = existing?.captureLastAttemptAt,
+                captureLastError = null,
             ),
         )
     }
@@ -200,6 +203,25 @@ class SourceRepository(
         sourceDao.updateReadingItemCaptureStatus(
             url = validatedUrl.normalizedUrl,
             status = safeStatus,
+            updatedAt = System.currentTimeMillis(),
+        )
+    }
+
+    suspend fun queueCaptureAttempt(url: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (!validatedUrl.isValid) return
+        sourceDao.markReadingItemCaptureAttempt(
+            url = validatedUrl.normalizedUrl,
+            attemptedAt = System.currentTimeMillis(),
+        )
+    }
+
+    suspend fun markCaptureFailed(url: String, error: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (!validatedUrl.isValid) return
+        sourceDao.markReadingItemCaptureFailed(
+            url = validatedUrl.normalizedUrl,
+            error = error.trim().ifBlank { "No se pudo extraer el artículo" }.take(240),
             updatedAt = System.currentTimeMillis(),
         )
     }
@@ -296,6 +318,9 @@ private fun ReadingItemEntity.toDomain(): ReadingItem =
         archivedAt = archivedAt,
         updatedAt = updatedAt,
         captureStatus = captureStatus,
+        captureAttemptCount = captureAttemptCount,
+        captureLastAttemptAt = captureLastAttemptAt,
+        captureLastError = captureLastError,
     )
 
 private fun HistoryEntity.toDomain(): HistoryItem =

@@ -72,6 +72,12 @@ interface SourceDao {
     @Query("UPDATE reading_items SET captureStatus = :status, updatedAt = :updatedAt WHERE url = :url")
     suspend fun updateReadingItemCaptureStatus(url: String, status: String, updatedAt: Long)
 
+    @Query("UPDATE reading_items SET captureStatus = 'capturing', captureAttemptCount = captureAttemptCount + 1, captureLastAttemptAt = :attemptedAt, captureLastError = NULL, updatedAt = :attemptedAt WHERE url = :url")
+    suspend fun markReadingItemCaptureAttempt(url: String, attemptedAt: Long)
+
+    @Query("UPDATE reading_items SET captureStatus = 'failed', captureLastError = :error, updatedAt = :updatedAt WHERE url = :url")
+    suspend fun markReadingItemCaptureFailed(url: String, error: String, updatedAt: Long)
+
     @Query("DELETE FROM reading_items WHERE url = :url")
     suspend fun deleteReadingItem(url: String)
 

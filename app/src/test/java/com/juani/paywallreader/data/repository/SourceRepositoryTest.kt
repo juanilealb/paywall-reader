@@ -6,6 +6,7 @@ import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_READY
 import com.juani.paywallreader.domain.model.Source
@@ -219,6 +220,33 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `queueCaptureAttempt marks bookmark capturing and increments retry metadata`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.queueCaptureAttempt(" https://example.com/article ")
+        repository.queueCaptureAttempt("https://example.com/article")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals(CAPTURE_STATUS_CAPTURING, item.captureStatus)
+        assertEquals(2, item.captureAttemptCount)
+        assertEquals(null, item.captureLastError)
+        assertTrue(item.captureLastAttemptAt != null)
+    }
+
+    @Test
+    fun `markCaptureFailed records retryable error without deleting bookmark`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+        repository.queueCaptureAttempt("https://example.com/article")
+
+        repository.markCaptureFailed("https://example.com/article", "Timeout while extracting")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals(CAPTURE_STATUS_FAILED, item.captureStatus)
+        assertEquals(1, item.captureAttemptCount)
+        assertEquals("Timeout while extracting", item.captureLastError)
+    }
+
+    @Test
     fun `moveBookmarkToFolder updates bookmark folder and exposes it in folders`() = runTest {
         repository.saveBookmarkFromExternalShare("https://example.com/article")
 
@@ -406,6 +434,32 @@ private class FakeSourceDao : SourceDao {
         readingItems.value = readingItems.value.map { item ->
             if (item.url == url) {
                 item.copy(captureStatus = status, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun markReadingItemCaptureAttempt(url: String, attemptedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(
+                    captureStatus = CAPTURE_STATUS_CAPTURING,
+                    captureAttemptCount = item.captureAttemptCount + 1,
+                    captureLastAttemptAt = attemptedAt,
+                    captureLastError = null,
+                    updatedAt = attemptedAt,
+                )
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun markReadingItemCaptureFailed(url: String, error: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(captureStatus = CAPTURE_STATUS_FAILED, captureLastError = error, updatedAt = updatedAt)
             } else {
                 item
             }
