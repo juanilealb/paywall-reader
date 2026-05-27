@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.juani.paywallreader.data.local.AppDatabase
 import com.juani.paywallreader.data.repository.SourceRepository
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
 import com.juani.paywallreader.domain.model.HistoryItem
 import com.juani.paywallreader.domain.model.ReadingItem
 import com.juani.paywallreader.domain.model.Source
@@ -104,6 +105,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun saveSharedUrl(url: String) {
         viewModelScope.launch {
             repository.saveBookmarkFromExternalShare(url)
+        }
+    }
+
+    fun markSharedUrlPending(url: String) {
+        viewModelScope.launch {
+            repository.saveBookmarkFromExternalShare(url)
+            repository.updateCaptureStatus(url, CAPTURE_STATUS_PENDING)
         }
     }
 

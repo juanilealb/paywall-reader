@@ -5,6 +5,9 @@ import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_READY
 import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import kotlinx.coroutines.flow.Flow
@@ -184,7 +187,35 @@ class SourceRepositoryTest {
         assertEquals("example.com", item.title)
         assertEquals("example.com", item.sourceName)
         assertEquals(UNFILED_FOLDER_NAME, item.folderName)
-        assertEquals("pending", item.captureStatus)
+        assertEquals(CAPTURE_STATUS_PENDING, item.captureStatus)
+    }
+
+    @Test
+    fun `updateCaptureStatus records capture lifecycle states`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.updateCaptureStatus(" https://example.com/article ", CAPTURE_STATUS_CAPTURING)
+
+        assertEquals(CAPTURE_STATUS_CAPTURING, sourceDao.readingItems.value.single().captureStatus)
+    }
+
+    @Test
+    fun `saveForLater marks captured bookmark ready`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+        repository.updateCaptureStatus("https://example.com/article", CAPTURE_STATUS_CAPTURING)
+
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            text = "Captured body",
+            markdown = "# Captured Article\n\nCaptured body",
+        )
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals("Captured Article", item.title)
+        assertEquals(CAPTURE_STATUS_READY, item.captureStatus)
+        assertEquals("Captured body", item.text)
     }
 
     @Test
@@ -365,6 +396,16 @@ private class FakeSourceDao : SourceDao {
         readingItems.value = readingItems.value.map { item ->
             if (item.url == url) {
                 item.copy(folderName = folderName, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun updateReadingItemCaptureStatus(url: String, status: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(captureStatus = status, updatedAt = updatedAt)
             } else {
                 item
             }

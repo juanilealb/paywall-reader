@@ -51,4 +51,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             repository.recordVisit(title, url, sourceName)
         }
     }
+
+    fun updateCaptureStatus(url: String, status: String) {
+        viewModelScope.launch {
+            repository.updateCaptureStatus(url, status)
+        }
+    }
 }
