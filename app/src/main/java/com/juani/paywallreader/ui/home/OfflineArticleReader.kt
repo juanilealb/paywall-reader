@@ -2,6 +2,11 @@ package com.juani.paywallreader.ui.home
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +30,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -39,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,6 +138,9 @@ internal fun OfflineArticleReaderScreen(
     onBack: () -> Unit,
     onOpenWeb: () -> Unit,
     onMarkRead: () -> Unit,
+    onArchiveAndNext: () -> Unit,
+    onMoveToFolderAndNext: () -> Unit,
+    onExitToMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val model = remember(item) { item.toOfflineArticleReaderModel() }
@@ -152,7 +165,7 @@ internal fun OfflineArticleReaderScreen(
                     start = 24.dp,
                     top = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding() + 18.dp,
                     end = 24.dp,
-                    bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + 32.dp,
+                    bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + 124.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -206,6 +219,17 @@ internal fun OfflineArticleReaderScreen(
                     )
                 }
             }
+            FloatingReaderActions(
+                onArchiveAndNext = onArchiveAndNext,
+                onMoveToFolderAndNext = onMoveToFolderAndNext,
+                onExitToMenu = onExitToMenu,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 14.dp,
+                        bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + 16.dp,
+                    ),
+            )
         }
     }
 }
@@ -248,6 +272,68 @@ private fun OfflineArticleTopBar(
             FilledTonalButton(onClick = onMarkRead) {
                 Icon(Icons.Rounded.Check, contentDescription = null)
                 Text("Leído")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingReaderActions(
+    onArchiveAndNext: () -> Unit,
+    onMoveToFolderAndNext: () -> Unit,
+    onExitToMenu: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + slideInHorizontally(initialOffsetX = { it / 2 }),
+            exit = slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut(),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = Color(0xFF26231D).copy(alpha = 0.96f),
+                contentColor = Color(0xFFFFF7EA),
+                tonalElevation = 0.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    FilledTonalButton(onClick = onArchiveAndNext) {
+                        Icon(Icons.Rounded.Archive, contentDescription = null)
+                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                        Text("Archivar + sig.")
+                    }
+                    FilledTonalButton(onClick = onMoveToFolderAndNext) {
+                        Icon(Icons.Rounded.Folder, contentDescription = null)
+                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                        Text("Carpeta + sig.")
+                    }
+                    FilledTonalButton(onClick = onExitToMenu) {
+                        Icon(Icons.Rounded.Close, contentDescription = null)
+                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                        Text("Salir")
+                    }
+                }
+            }
+        }
+        Surface(
+            shape = CircleShape,
+            color = Color(0xFF26231D).copy(alpha = 0.96f),
+            contentColor = Color(0xFFFFF7EA),
+        ) {
+            IconButton(onClick = { expanded = !expanded }) {
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.Close else Icons.Rounded.MoreVert,
+                    contentDescription = if (expanded) "Ocultar acciones" else "Mostrar acciones",
+                )
             }
         }
     }

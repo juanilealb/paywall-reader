@@ -35,4 +35,19 @@ class XPostExtractorTest {
         assertTrue(article.markdown.startsWith("# Post de Suryansh Tiwari @Suryanshti777"))
         assertTrue(article.markdown.contains("Original: https://x.com/Suryanshti777/status/2057854303499636946"))
     }
+
+    @Test
+    fun `externalLinksFromOEmbedHtml keeps article links and skips X chrome links`() {
+        val links = XPostExtractor.externalLinksFromOEmbedHtml(
+            """
+                <blockquote class="twitter-tweet">
+                  <p><a href="https://t.co/cardlink">https://t.co/cardlink</a></p>
+                  <a href="https://x.com/author/status/1234567890">May 22</a>
+                  <a href="https://twitter.com/author">author</a>
+                </blockquote>
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("https://t.co/cardlink"), links)
+    }
 }
