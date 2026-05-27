@@ -55,6 +55,7 @@ import androidx.compose.material3.FloatingToolbarVerticalFabPosition
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalFloatingToolbar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -112,10 +114,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
-private val FoldFloatingActionButtonSize = 64.dp
-private val ReaderToolbarHeight = 76.dp
-private val ReaderToolbarActionSize = 48.dp
-private val ReaderToolbarIconSize = 22.dp
+private val FoldFloatingActionButtonSize = 60.dp
+private val ReaderToolbarHeight = 72.dp
+private val ReaderToolbarActionSize = 42.dp
+private val ReaderToolbarIconSize = 20.dp
 
 @Composable
 fun HeadlessArticleCaptureHost(
@@ -355,6 +357,7 @@ fun ReaderScreen(
         initialUrl.isBlogAuthHost()
     }
     var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(false) }
+    var readerFocusMode by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl }.toOriginalArticleUrl())))
     }
@@ -423,6 +426,10 @@ fun ReaderScreen(
     fun updateNavigationState(view: WebView?) {
         canNavigateBack = view?.canGoBack() == true
         canNavigateForward = view?.canGoForward() == true
+    }
+
+    LaunchedEffect(readerFocusMode, webView) {
+        webView?.setReaderFocusMode(readerFocusMode)
     }
 
     BackHandler {
@@ -526,6 +533,11 @@ fun ReaderScreen(
                                         view?.applySiteChromeCleanup()
                                         view?.postDelayed({ view.applySiteChromeCleanup() }, 700L)
                                         view?.postDelayed({ view.applySiteChromeCleanup() }, 1_800L)
+                                    }
+                                    if (readerFocusMode) {
+                                        view?.setReaderFocusMode(true)
+                                        view?.postDelayed({ view.setReaderFocusMode(true) }, 700L)
+                                        view?.postDelayed({ view.setReaderFocusMode(true) }, 1_800L)
                                     }
                                     view?.installPageStateSignals(detectsAuthSurfaces)
                                     if (url?.isReaderServiceUrl() == true) {
@@ -716,6 +728,10 @@ fun ReaderScreen(
                     },
                     onOpenOriginal = openOriginal,
                     onOpenReader = openReaderVersion,
+                    readerFocusMode = readerFocusMode,
+                    onToggleReaderFocusMode = {
+                        readerFocusMode = !readerFocusMode
+                    },
                     onSaveForLater = saveCurrentForLater,
                     onMarkRead = markCurrentRead,
                     onShare = shareOriginal,
@@ -779,6 +795,8 @@ private fun ReaderFloatingToolbar(
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
+    readerFocusMode: Boolean,
+    onToggleReaderFocusMode: () -> Unit,
     onSaveForLater: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
@@ -797,7 +815,7 @@ private fun ReaderFloatingToolbar(
             },
             modifier = modifier,
             colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp),
             floatingActionButtonPosition = FloatingToolbarVerticalFabPosition.Bottom,
         ) {
             ReaderToolbarActions(
@@ -815,6 +833,8 @@ private fun ReaderFloatingToolbar(
                 onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
+                readerFocusMode = readerFocusMode,
+                onToggleReaderFocusMode = onToggleReaderFocusMode,
                 onSaveForLater = onSaveForLater,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
@@ -835,7 +855,7 @@ private fun ReaderFloatingToolbar(
             },
             modifier = modifier.height(ReaderToolbarHeight),
             colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp),
             floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
         ) {
             ReaderToolbarActions(
@@ -853,6 +873,8 @@ private fun ReaderFloatingToolbar(
                 onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
                 onOpenReader = onOpenReader,
+                readerFocusMode = readerFocusMode,
+                onToggleReaderFocusMode = onToggleReaderFocusMode,
                 onSaveForLater = onSaveForLater,
                 onMarkRead = onMarkRead,
                 onShare = onShare,
@@ -910,6 +932,8 @@ private fun ReaderToolbarActions(
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
     onOpenReader: () -> Unit,
+    readerFocusMode: Boolean,
+    onToggleReaderFocusMode: () -> Unit,
     onSaveForLater: () -> Unit,
     onMarkRead: () -> Unit,
     onShare: () -> Unit,
@@ -965,9 +989,32 @@ private fun ReaderToolbarActions(
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
-        IconButton(onClick = onOpenReader, modifier = Modifier.size(ReaderToolbarActionSize)) {
+        IconButton(
+            onClick = onToggleReaderFocusMode,
+            modifier = Modifier.size(ReaderToolbarActionSize),
+            colors = IconButtonDefaults.iconButtonColors(
+                contentColor = if (readerFocusMode) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            ),
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.Article,
+                contentDescription = stringResource(
+                    if (readerFocusMode) {
+                        R.string.reader_focus_mode_off
+                    } else {
+                        R.string.reader_focus_mode_on
+                    },
+                ),
+                modifier = Modifier.size(ReaderToolbarIconSize),
+            )
+        }
+        IconButton(onClick = onOpenReader, modifier = Modifier.size(ReaderToolbarActionSize)) {
+            Icon(
+                imageVector = Icons.Rounded.CloudOff,
                 contentDescription = stringResource(R.string.reader_open_reader),
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
@@ -1141,6 +1188,112 @@ private fun emptyWebResponse(): WebResourceResponse =
         mapOf("Access-Control-Allow-Origin" to "*"),
         ByteArrayInputStream(ByteArray(0)),
     )
+
+private fun WebView.setReaderFocusMode(enabled: Boolean) {
+    val enabledArg = if (enabled) "true" else "false"
+    evaluateJavascript(
+        """
+        (function(enabled) {
+          var root = document.documentElement;
+          var style = document.getElementById('paywall-reader-focus-mode-style');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = 'paywall-reader-focus-mode-style';
+            style.textContent = `
+              html.paywall-reader-focus-mode,
+              html.paywall-reader-focus-mode body {
+                background: #f7f4ed !important;
+                color: #242018 !important;
+                color-scheme: light !important;
+                overflow-y: auto !important;
+              }
+              html.paywall-reader-focus-mode body {
+                font-family: Georgia, 'Times New Roman', serif !important;
+                line-height: 1.68 !important;
+                font-size: 18px !important;
+                text-rendering: optimizeLegibility !important;
+                -webkit-font-smoothing: antialiased !important;
+              }
+              html.paywall-reader-focus-mode :where(header, footer, nav, aside, [role="banner"], [role="navigation"], [role="complementary"], [aria-modal="true"], dialog, .modal, .overlay, .newsletter, .subscribe, .subscription, .paywall, .social-share, .share, .comments, .comment, .related, .recommended, .recommendations, .trending, .most-popular, .advertisement, .advert, .ad, [class*="ad-"], [class*="ad_"], [id*="ad-"], [id*="ad_"], iframe[src*="ads"], iframe[src*="doubleclick"], iframe[src*="googlesyndication"]) {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                max-height: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+              }
+              html.paywall-reader-focus-mode .paywall-reader-focus-target,
+              html.paywall-reader-focus-mode :where(article, main, [role="main"]) {
+                display: block !important;
+                visibility: visible !important;
+                max-width: 760px !important;
+                width: auto !important;
+                min-height: auto !important;
+                height: auto !important;
+                max-height: none !important;
+                margin: 0 auto !important;
+                padding: 24px 18px 112px !important;
+                background: #f7f4ed !important;
+                color: #242018 !important;
+                overflow: visible !important;
+                box-shadow: none !important;
+              }
+              html.paywall-reader-focus-mode :where(h1, h2, h3, h4, h5, h6) {
+                color: #17130f !important;
+                font-family: Georgia, 'Times New Roman', serif !important;
+                letter-spacing: -0.02em !important;
+                line-height: 1.15 !important;
+                max-width: 760px !important;
+              }
+              html.paywall-reader-focus-mode :where(p, li, blockquote, figcaption) {
+                color: #2a241d !important;
+                font-family: Georgia, 'Times New Roman', serif !important;
+                font-size: 1.05em !important;
+                line-height: 1.72 !important;
+                max-width: 760px !important;
+              }
+              html.paywall-reader-focus-mode :where(a) {
+                color: #6e4f1f !important;
+              }
+              html.paywall-reader-focus-mode :where(img, video, picture, figure) {
+                max-width: 100% !important;
+                height: auto !important;
+              }
+              html.paywall-reader-focus-mode * {
+                text-shadow: none !important;
+              }
+            `;
+            document.head.appendChild(style);
+          }
+
+          Array.prototype.slice.call(document.querySelectorAll('.paywall-reader-focus-target')).forEach(function(node) {
+            node.classList.remove('paywall-reader-focus-target');
+          });
+
+          if (!enabled) {
+            root.classList.remove('paywall-reader-focus-mode');
+            return 'off';
+          }
+
+          var target = document.querySelector('article') ||
+            document.querySelector('[role="main"]') ||
+            document.querySelector('main') ||
+            document.querySelector('.article, .post, .entry-content, .story, .content') ||
+            document.body;
+          if (target) {
+            target.classList.add('paywall-reader-focus-target');
+          }
+          root.classList.add('paywall-reader-focus-mode');
+          document.documentElement.classList.remove('modal-open', 'no-scroll', 'noscroll', 'scroll-lock');
+          if (document.body) {
+            document.body.classList.remove('modal-open', 'no-scroll', 'noscroll', 'scroll-lock');
+          }
+          return 'on';
+        })($enabledArg);
+        """.trimIndent(),
+        null,
+    )
+}
 
 private fun WebView.applySiteChromeCleanup() {
     evaluateJavascript(
