@@ -85,6 +85,23 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
+import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
+import com.juani.paywallreader.data.reader.ARCHIVE_FO_HOST
+import com.juani.paywallreader.data.reader.UNWALL_HOST
+import com.juani.paywallreader.data.reader.isArchiveServiceUrl
+import com.juani.paywallreader.data.reader.isBlogAuthHost
+import com.juani.paywallreader.data.reader.isLikelyArticleUrl
+import com.juani.paywallreader.data.reader.isLikelyWebUrl
+import com.juani.paywallreader.data.reader.isNewYorkTimesHost
+import com.juani.paywallreader.data.reader.isPaywallFallbackHost
+import com.juani.paywallreader.data.reader.isReaderServiceUrl
+import com.juani.paywallreader.data.reader.readerOriginalUrl
+import com.juani.paywallreader.data.reader.toArchiveSearchUrl
+import com.juani.paywallreader.data.reader.toArticleReaderUrl
+import com.juani.paywallreader.data.reader.toOriginalArticleUrl
+import com.juani.paywallreader.data.reader.toPeriscopeUrl
+import com.juani.paywallreader.data.reader.toPreferredReaderUrl
+import com.juani.paywallreader.data.reader.toUnwallUrl
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -799,35 +816,6 @@ private val ARTICLE_CAPTURE_SCRIPT = """
     })();
 """.trimIndent()
 
-private const val REMOVE_PAYWALLS_HOST = "removepaywalls.com"
-private const val PERISCOPE_HOST = "periscope.corsfix.com"
-private const val ARTICLE_READER_HOST = "accessarticlenow.com"
-private const val UNWALL_HOST = "unwall.app"
-private const val ARCHIVE_FO_HOST = "archive.fo"
-
-private val ALLOWED_READER_HOSTS = setOf(
-    REMOVE_PAYWALLS_HOST,
-    PERISCOPE_HOST,
-    ARTICLE_READER_HOST,
-    UNWALL_HOST,
-    "archive.today",
-    ARCHIVE_FO_HOST,
-    "archive.is",
-    "archive.ph",
-)
-
-private val PAYWALL_FALLBACK_HOSTS = setOf(
-    "www.wired.com",
-    "wired.com",
-    "medium.com",
-    "substack.com",
-)
-
-private val BLOG_AUTH_HOSTS = setOf(
-    "medium.com",
-    "substack.com",
-)
-
 private val BLOCKED_AD_HOST_PARTS = listOf(
     "doubleclick.net",
     "googlesyndication.com",
@@ -867,105 +855,6 @@ private fun String.toBasicMarkdown(title: String, url: String): String = buildSt
             appendLine()
         }
 }.trim()
-
-private fun Uri.toArticleReaderUrl(): String =
-    "https://$ARTICLE_READER_HOST/api/c/full?q=${Uri.encode(toString())}"
-
-private fun Uri.toPeriscopeUrl(): String =
-    "https://$PERISCOPE_HOST/?url=${Uri.encode(toString())}"
-
-private fun Uri.toUnwallUrl(): String =
-    "https://$UNWALL_HOST/${toString().removePrefix("https://").removePrefix("http://")}?reader=1"
-
-private fun String.isReaderServiceUrl(): Boolean =
-    runCatching { Uri.parse(this).isReaderServiceUrl() }.getOrDefault(false)
-
-private fun Uri.isReaderServiceUrl(): Boolean = host in ALLOWED_READER_HOSTS
-
-private fun String.isArchiveServiceUrl(): Boolean =
-    runCatching {
-        Uri.parse(this).host in setOf("archive.today", ARCHIVE_FO_HOST, "archive.is", "archive.ph")
-    }.getOrDefault(false)
-
-private fun String.toOriginalArticleUrl(): String =
-    runCatching {
-        val uri = Uri.parse(this)
-        uri.readerOriginalUrl() ?: this
-    }.getOrDefault(this)
-
-private fun String.toArchiveSearchUrl(): String =
-    "https://archive.ph/search/?q=${Uri.encode(this)}"
-
-private fun String.toPreferredReaderUrl(fallbackToOriginal: Boolean = true): String =
-    runCatching {
-        val uri = Uri.parse(this)
-        when {
-            uri.isReaderServiceUrl() -> this
-            uri.isNewYorkTimesHost() -> uri.toPeriscopeUrl()
-            fallbackToOriginal -> this
-            else -> toArchiveSearchUrl()
-        }
-    }.getOrDefault(this)
-
-private fun String.isLikelyWebUrl(): Boolean =
-    runCatching {
-        val uri = Uri.parse(this)
-        uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
-    }.getOrDefault(false)
-
-private fun String.isBlogAuthHost(): Boolean =
-    runCatching { Uri.parse(this).isBlogAuthHost() }.getOrDefault(false)
-
-private fun Uri.isBlogAuthHost(): Boolean {
-    val normalizedHost = host?.removePrefix("www.") ?: return false
-    return BLOG_AUTH_HOSTS.any { normalizedHost == it || normalizedHost.endsWith(".$it") }
-}
-
-private fun Uri.isPaywallFallbackHost(): Boolean {
-    val normalizedHost = host?.removePrefix("www.") ?: return false
-    return PAYWALL_FALLBACK_HOSTS.any { normalizedHost == it || normalizedHost.endsWith(".$it") }
-}
-
-private fun Uri.isNewYorkTimesHost(): Boolean {
-    val normalizedHost = host?.removePrefix("www.") ?: return false
-    return normalizedHost == "nytimes.com" || normalizedHost.endsWith(".nytimes.com")
-}
-
-private fun Uri.readerOriginalUrl(): String? {
-    return when (host) {
-        PERISCOPE_HOST -> getQueryParameter("url")
-        ARTICLE_READER_HOST -> getQueryParameter("q")
-        UNWALL_HOST -> {
-            val pathUrl = toString()
-                .substringAfter("https://$UNWALL_HOST/", "")
-                .substringBefore("?")
-            if (pathUrl.isNotBlank()) "https://$pathUrl" else null
-        }
-        REMOVE_PAYWALLS_HOST -> toString().removePrefix("https://$REMOVE_PAYWALLS_HOST/")
-            .removePrefix("http://$REMOVE_PAYWALLS_HOST/")
-        ARCHIVE_FO_HOST -> toString().removePrefix("https://$ARCHIVE_FO_HOST/")
-            .removePrefix("http://$ARCHIVE_FO_HOST/")
-        else -> null
-    }
-}
-
-private fun Uri.isLikelyArticleUrl(): Boolean {
-    val segments = pathSegments.filter { it.isNotBlank() }
-    val firstSegment = segments.firstOrNull().orEmpty()
-    val lastSegment = segments.lastOrNull().orEmpty()
-    return (segments.size >= 2 && firstSegment in ARTICLE_PATH_PREFIXES) ||
-        segments.size >= 3 ||
-        (segments.size >= 2 && lastSegment.length >= 20 && ("-" in lastSegment || lastSegment.endsWith(".html")))
-}
-
-private val ARTICLE_PATH_PREFIXES = setOf(
-    "article",
-    "articles",
-    "news",
-    "review",
-    "reviews",
-    "story",
-)
 
 private fun Uri.isBlockedAdResource(): Boolean {
     val normalizedHost = host?.lowercase().orEmpty()
@@ -1294,8 +1183,7 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
 
 private fun WebView.loadFallbackReaderIfPaywalled(loadedUrl: String?, delayMillis: Long) {
     val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
-    val loadedHost = loadedUri.host ?: return
-    if (loadedHost !in ALLOWED_READER_HOSTS && !loadedUri.isPaywallFallbackHost()) {
+    if (!loadedUri.isReaderServiceUrl() && !loadedUri.isPaywallFallbackHost()) {
         return
     }
 
