@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,10 +25,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
@@ -125,6 +129,7 @@ fun HomeRoute(
     val context = LocalContext.current
     var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
+    var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
 
     LaunchedEffect(pendingSharedUrl) {
         val url = pendingSharedUrl?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
@@ -149,6 +154,8 @@ fun HomeRoute(
             if (item.captureStatus != CAPTURE_STATUS_READY && onSharedUrlOpen != null) {
                 viewModel.markSharedUrlPending(item.url)
                 onSharedUrlOpen(item.url)
+            } else if (item.hasCapturedBody()) {
+                cachedArticleToRead = item
             } else {
                 onSourceClick(
                     Source(
@@ -187,6 +194,29 @@ fun HomeRoute(
         showBottomControls = showBottomControls,
         modifier = modifier,
     )
+
+    cachedArticleToRead?.let { item ->
+        CapturedArticleDialog(
+            item = item,
+            onDismiss = { cachedArticleToRead = null },
+            onOpenWeb = {
+                cachedArticleToRead = null
+                onSourceClick(
+                    Source(
+                        id = -item.id,
+                        name = item.title,
+                        url = item.url,
+                        isDefault = false,
+                        folderName = readLaterLabel,
+                    ),
+                )
+            },
+            onMarkRead = {
+                viewModel.markRead(item.url)
+                cachedArticleToRead = null
+            },
+        )
+    }
 }
 
 @Composable
@@ -725,6 +755,77 @@ fun HomeScreen(
         )
     }
 }
+
+@Composable
+private fun CapturedArticleDialog(
+    item: ReadingItem,
+    onDismiss: () -> Unit,
+    onOpenWeb: () -> Unit,
+    onMarkRead: () -> Unit,
+) {
+    val articleBody = item.articleBodyForReading()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOfNotNull(
+                        item.author,
+                        item.sourceName.ifBlank { item.url.toDisplayHost() },
+                        item.url.toDisplayHost(),
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        text = {
+            SelectionContainer {
+                Text(
+                    text = articleBody,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onMarkRead) {
+                Text(stringResource(R.string.mark_read))
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onOpenWeb) {
+                    Text("Abrir web")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        },
+    )
+}
+
+private fun ReadingItem.hasCapturedBody(): Boolean =
+    articleBodyForReading().isNotBlank()
+
+private fun ReadingItem.articleBodyForReading(): String =
+    markdown?.takeIf { it.isNotBlank() }
+        ?: text?.takeIf { it.isNotBlank() }
+        ?: excerpt?.takeIf { it.isNotBlank() }
+        ?: ""
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
