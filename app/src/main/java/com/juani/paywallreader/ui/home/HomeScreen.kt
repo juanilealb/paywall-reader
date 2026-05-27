@@ -105,6 +105,8 @@ import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
+import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
+import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
 import kotlinx.coroutines.launch
@@ -120,7 +122,6 @@ fun HomeRoute(
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     showBottomControls: Boolean = true,
-    onSharedUrlOpen: ((String) -> Unit)? = null,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -129,21 +130,18 @@ fun HomeRoute(
     val context = LocalContext.current
     var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
+    var pendingHeadlessCaptureUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
 
     LaunchedEffect(pendingSharedUrl) {
-        val url = pendingSharedUrl?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        val decision = ExternalShareRoutePolicy.decide(pendingSharedUrl)
+        val url = decision.captureUrl
         if (url != null && url != consumedSharedUrl) {
             consumedSharedUrl = url
-            if (onSharedUrlOpen != null) {
-                viewModel.markSharedUrlPending(url)
-                onSharedUrlOpen(url)
-                Toast.makeText(context, "Abriendo y guardando para leer después", Toast.LENGTH_SHORT).show()
-            } else {
-                viewModel.saveSharedUrl(url)
-                openReadLaterRequest++
-                Toast.makeText(context, "Guardado para leer después", Toast.LENGTH_SHORT).show()
-            }
+            viewModel.markSharedUrlPending(url)
+            pendingHeadlessCaptureUrl = url
+            openReadLaterRequest++
+            Toast.makeText(context, "Guardando lectura en segundo plano", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -151,9 +149,11 @@ fun HomeRoute(
         uiState = uiState,
         onSourceClick = onSourceClick,
         onReadingItemClick = { item ->
-            if (item.captureStatus != CAPTURE_STATUS_READY && onSharedUrlOpen != null) {
+            if (item.captureStatus != CAPTURE_STATUS_READY) {
                 viewModel.markSharedUrlPending(item.url)
-                onSharedUrlOpen(item.url)
+                pendingHeadlessCaptureUrl = item.url
+                openReadLaterRequest++
+                Toast.makeText(context, "Reintentando captura en segundo plano", Toast.LENGTH_SHORT).show()
             } else if (item.hasCapturedBody()) {
                 cachedArticleToRead = item
             } else {
@@ -193,6 +193,19 @@ fun HomeRoute(
         showAddSourceFab = showAddSourceFab,
         showBottomControls = showBottomControls,
         modifier = modifier,
+    )
+
+    HeadlessArticleCaptureHost(
+        captureUrl = pendingHeadlessCaptureUrl,
+        onSaveForLater = viewModel::saveForLater,
+        onCaptureStatusChange = viewModel::updateCaptureStatus,
+        onCaptureComplete = { completedUrl ->
+            if (pendingHeadlessCaptureUrl == completedUrl) {
+                pendingHeadlessCaptureUrl = null
+            } else if (pendingHeadlessCaptureUrl?.trim() == completedUrl.trim()) {
+                pendingHeadlessCaptureUrl = null
+            }
+        },
     )
 
     cachedArticleToRead?.let { item ->
