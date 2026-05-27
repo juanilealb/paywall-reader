@@ -5,6 +5,8 @@ import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_PERISCOPE
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_UNWALL
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
@@ -217,6 +219,52 @@ class SourceRepositoryTest {
         assertEquals("Captured Article", item.title)
         assertEquals(CAPTURE_STATUS_READY, item.captureStatus)
         assertEquals("Captured body", item.text)
+    }
+
+    @Test
+    fun `saveForLater records capture provider for debugging`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            resolvedUrl = "https://periscope.corsfix.com/?url=https%3A%2F%2Fexample.com%2Farticle",
+            captureProvider = CAPTURE_PROVIDER_PERISCOPE,
+        )
+
+        assertEquals(CAPTURE_PROVIDER_PERISCOPE, sourceDao.readingItems.value.single().captureProvider)
+    }
+
+    @Test
+    fun `saveForLater falls back to original for unknown capture providers`() = runTest {
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            captureProvider = "bad-provider",
+        )
+
+        assertEquals("original", sourceDao.readingItems.value.single().captureProvider)
+    }
+
+    @Test
+    fun `saveForLater can replace capture provider on recapture`() = runTest {
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            captureProvider = CAPTURE_PROVIDER_PERISCOPE,
+        )
+
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            captureProvider = CAPTURE_PROVIDER_UNWALL,
+        )
+
+        assertEquals(CAPTURE_PROVIDER_UNWALL, sourceDao.readingItems.value.single().captureProvider)
     }
 
     @Test

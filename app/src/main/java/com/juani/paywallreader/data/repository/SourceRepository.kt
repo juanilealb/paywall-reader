@@ -5,6 +5,12 @@ import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ARCHIVE
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ORIGINAL
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_PERISCOPE
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_REMOVE_PAYWALLS
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_UNWALL
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
@@ -123,6 +129,7 @@ class SourceRepository(
         text: String? = null,
         markdown: String? = null,
         imageUrl: String? = null,
+        captureProvider: String = CAPTURE_PROVIDER_ORIGINAL,
     ) {
         val validatedUrl = validateSourceUrl(url)
         if (!validatedUrl.isValid) return
@@ -150,6 +157,7 @@ class SourceRepository(
                 archivedAt = null,
                 updatedAt = now,
                 captureStatus = CAPTURE_STATUS_READY,
+                captureProvider = captureProvider.normalizedCaptureProvider(),
                 captureAttemptCount = existing?.captureAttemptCount ?: 0,
                 captureLastAttemptAt = existing?.captureLastAttemptAt,
                 captureLastError = null,
@@ -341,6 +349,7 @@ private fun ReadingItemEntity.toDomain(): ReadingItem =
         archivedAt = archivedAt,
         updatedAt = updatedAt,
         captureStatus = captureStatus,
+        captureProvider = captureProvider,
         captureAttemptCount = captureAttemptCount,
         captureLastAttemptAt = captureLastAttemptAt,
         captureLastError = captureLastError,
@@ -357,6 +366,16 @@ private fun HistoryEntity.toDomain(): HistoryItem =
 
 private fun String.normalizedFolderName(): String =
     trim().ifBlank { UNFILED_FOLDER_NAME }
+
+private fun String.normalizedCaptureProvider(): String = when (trim()) {
+    CAPTURE_PROVIDER_PERISCOPE,
+    CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW,
+    CAPTURE_PROVIDER_UNWALL,
+    CAPTURE_PROVIDER_ARCHIVE,
+    CAPTURE_PROVIDER_REMOVE_PAYWALLS,
+    CAPTURE_PROVIDER_ORIGINAL -> trim()
+    else -> CAPTURE_PROVIDER_ORIGINAL
+}
 
 private fun String.toDisplayTitle(): String =
     removePrefix("https://")

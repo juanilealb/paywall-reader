@@ -92,6 +92,8 @@ import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
 import com.juani.paywallreader.data.reader.ARCHIVE_FO_HOST
 import com.juani.paywallreader.data.reader.UNWALL_HOST
+import com.juani.paywallreader.data.reader.captureProviderKey
+import com.juani.paywallreader.data.reader.captureProviderLabel
 import com.juani.paywallreader.data.reader.isArchiveServiceUrl
 import com.juani.paywallreader.data.reader.isBlogAuthHost
 import com.juani.paywallreader.data.reader.isLikelyArticleUrl
@@ -129,6 +131,7 @@ fun HeadlessArticleCaptureHost(
         text: String?,
         markdown: String?,
         imageUrl: String?,
+        captureProvider: String?,
     ) -> Unit,
     onCaptureStatusChange: (url: String, status: String) -> Unit,
     onCaptureComplete: (url: String) -> Unit,
@@ -308,6 +311,7 @@ fun ReaderScreen(
         text: String?,
         markdown: String?,
         imageUrl: String?,
+        captureProvider: String?,
     ) -> Unit,
     onCaptureStatusChange: (url: String, status: String) -> Unit = { _, _ -> },
     onMarkRead: (url: String) -> Unit,
@@ -372,6 +376,7 @@ fun ReaderScreen(
         val view = webView
         val resolvedUrl = view?.url ?: currentUrl.ifBlank { sourceUrl }
         val originalUrl = resolvedUrl.toOriginalArticleUrl()
+        val captureProvider = resolvedUrl.captureProviderKey()
         val title = currentTitle.ifBlank { sourceName }
         if (view == null) {
             onSaveForLater(
@@ -385,6 +390,7 @@ fun ReaderScreen(
                 null,
                 null,
                 null,
+                captureProvider,
             )
             onCaptured()
         } else {
@@ -404,6 +410,7 @@ fun ReaderScreen(
                     payload?.optString("markdown")?.takeIf { it.isNotBlank() }
                         ?: capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
                     payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
+                    captureProvider,
                 )
                 onCaptured()
             }
@@ -434,6 +441,7 @@ fun ReaderScreen(
         val toolbarAlignment = Alignment.BottomEnd
         val showShareAction = maxWidth >= 380.dp
         val isArchivePage = currentUrl.isArchiveServiceUrl()
+        val providerLabel = currentUrl.captureProviderKey().captureProviderLabel()
 
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -652,6 +660,15 @@ fun ReaderScreen(
                 )
             }
 
+            ProviderDebugPill(
+                providerLabel = providerLabel,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(WindowInsets.safeDrawing.asPaddingValues())
+                    .padding(top = 8.dp, end = 10.dp)
+                    .zIndex(2f),
+            )
+
             when {
                 hasError -> ReaderError(
                     onRetry = {
@@ -721,6 +738,27 @@ fun ReaderScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProviderDebugPill(
+    providerLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Text(
+            text = "Provider · $providerLabel",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -1038,11 +1076,13 @@ private fun WebView.captureHeadlessArticle(
         text: String?,
         markdown: String?,
         imageUrl: String?,
+        captureProvider: String?,
     ) -> Unit,
     onCaptured: () -> Unit,
 ) {
     val resolvedUrl = url ?: sourceUrl
     val originalUrl = resolvedUrl.toOriginalArticleUrl()
+    val captureProvider = resolvedUrl.captureProviderKey()
     val fallbackTitle = title?.takeIf { it.isNotBlank() } ?: originalUrl.toDisplaySourceName()
     evaluateArticleCaptureScript { rawPayload ->
         val payload = rawPayload.decodeArticleCapturePayload()
@@ -1060,6 +1100,7 @@ private fun WebView.captureHeadlessArticle(
             payload?.optString("markdown")?.takeIf { it.isNotBlank() }
                 ?: capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
             payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
+            captureProvider,
         )
         onCaptured()
     }

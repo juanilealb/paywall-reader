@@ -1,12 +1,20 @@
 package com.juani.paywallreader.data.reader
 
 import android.net.Uri
+import java.net.URI
 
 const val REMOVE_PAYWALLS_HOST = "removepaywalls.com"
 const val PERISCOPE_HOST = "periscope.corsfix.com"
 const val ARTICLE_READER_HOST = "accessarticlenow.com"
 const val UNWALL_HOST = "unwall.app"
 const val ARCHIVE_FO_HOST = "archive.fo"
+
+const val CAPTURE_PROVIDER_ORIGINAL = "original"
+const val CAPTURE_PROVIDER_PERISCOPE = "periscope"
+const val CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW = "access_article_now"
+const val CAPTURE_PROVIDER_UNWALL = "unwall"
+const val CAPTURE_PROVIDER_ARCHIVE = "archive"
+const val CAPTURE_PROVIDER_REMOVE_PAYWALLS = "remove_paywalls"
 
 val ALLOWED_READER_HOSTS = setOf(
     REMOVE_PAYWALLS_HOST,
@@ -53,6 +61,29 @@ fun String.isReaderServiceUrl(): Boolean =
     runCatching { Uri.parse(this).isReaderServiceUrl() }.getOrDefault(false)
 
 fun Uri.isReaderServiceUrl(): Boolean = host in ALLOWED_READER_HOSTS
+
+fun String.captureProviderKey(): String =
+    runCatching { URI(this).host.captureProviderKeyForHost() }.getOrDefault(CAPTURE_PROVIDER_ORIGINAL)
+
+fun Uri.captureProviderKey(): String = host.captureProviderKeyForHost()
+
+private fun String?.captureProviderKeyForHost(): String = when (this) {
+    PERISCOPE_HOST -> CAPTURE_PROVIDER_PERISCOPE
+    ARTICLE_READER_HOST -> CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW
+    UNWALL_HOST -> CAPTURE_PROVIDER_UNWALL
+    REMOVE_PAYWALLS_HOST -> CAPTURE_PROVIDER_REMOVE_PAYWALLS
+    ARCHIVE_FO_HOST, "archive.today", "archive.is", "archive.ph" -> CAPTURE_PROVIDER_ARCHIVE
+    else -> CAPTURE_PROVIDER_ORIGINAL
+}
+
+fun String.captureProviderLabel(): String = when (this) {
+    CAPTURE_PROVIDER_PERISCOPE -> "Periscope"
+    CAPTURE_PROVIDER_ACCESS_ARTICLE_NOW -> "AccessArticleNow"
+    CAPTURE_PROVIDER_UNWALL -> "Unwall"
+    CAPTURE_PROVIDER_ARCHIVE -> "Archive"
+    CAPTURE_PROVIDER_REMOVE_PAYWALLS -> "RemovePaywalls"
+    else -> "Original"
+}
 
 fun String.isArchiveServiceUrl(): Boolean =
     runCatching {
