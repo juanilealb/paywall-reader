@@ -1,6 +1,7 @@
 package com.juani.paywallreader.ui.home
 
 import android.app.Application
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,6 +108,7 @@ fun HomeRoute(
     onSourceClick: (Source) -> Unit,
     modifier: Modifier = Modifier,
     addSourceRequest: Int = 0,
+    pendingSharedUrl: String? = null,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     showBottomControls: Boolean = true,
@@ -115,6 +117,19 @@ fun HomeRoute(
     val uiState by viewModel.uiState.collectAsState()
     val readLaterLabel = stringResource(R.string.read_later)
     val historyLabel = stringResource(R.string.history)
+    val context = LocalContext.current
+    var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
+
+    LaunchedEffect(pendingSharedUrl) {
+        val url = pendingSharedUrl?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        if (url != null && url != consumedSharedUrl) {
+            consumedSharedUrl = url
+            viewModel.saveSharedUrl(url)
+            openReadLaterRequest++
+            Toast.makeText(context, "Guardado para leer después", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     HomeScreen(
         uiState = uiState,
@@ -150,6 +165,7 @@ fun HomeRoute(
         onUpdateSource = viewModel::updateSource,
         existingUrls = uiState.sources.map { it.url }.toSet(),
         addSourceRequest = addSourceRequest,
+        openReadLaterRequest = openReadLaterRequest,
         selectedSourceUrl = selectedSourceUrl,
         showAddSourceFab = showAddSourceFab,
         showBottomControls = showBottomControls,
@@ -181,6 +197,7 @@ fun HomeScreen(
     onUpdateSource: (Source, String, String, String) -> Unit,
     existingUrls: Set<String>,
     addSourceRequest: Int = 0,
+    openReadLaterRequest: Int = 0,
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     showBottomControls: Boolean = true,
@@ -203,11 +220,12 @@ fun HomeScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
-    val folders = remember(uiState.folders, uiState.sources) {
-        val hasUnfiledSources = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME }
-        (uiState.folders + uiState.sources.map { it.folderName })
+    val folders = remember(uiState.folders, uiState.sources, uiState.readingItems) {
+        val hasUnfiledItems = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME } ||
+            uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
+        (uiState.folders + uiState.sources.map { it.folderName } + uiState.readingItems.map { it.folderName })
             .distinct()
-            .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledSources }
+            .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
             .sortedBy { it.lowercase() }
     }
     val normalizedSearch = searchQuery.trim()
@@ -222,9 +240,10 @@ fun HomeScreen(
             }
             .toList()
     }
-    val visibleReadingItems = remember(uiState.readingItems, normalizedSearch, readLaterFilter) {
+    val visibleReadingItems = remember(uiState.readingItems, selectedFolder, normalizedSearch, readLaterFilter) {
         uiState.readingItems
             .asSequence()
+            .filter { item -> selectedFolder == null || item.folderName == selectedFolder }
             .filter { item -> readLaterFilter.matches(item) }
             .filter { item ->
                 normalizedSearch.isBlank() ||
@@ -251,6 +270,14 @@ fun HomeScreen(
             addSourceInitialUrl = ""
             addSourceInitialFolder = selectedFolder ?: UNFILED_FOLDER_NAME
             showAddSourceSheet = true
+        }
+    }
+
+    LaunchedEffect(openReadLaterRequest) {
+        if (openReadLaterRequest > 0) {
+            selectedSection = HomeSection.ReadLater
+            readLaterFilter = ReadLaterFilter.All
+            searchQuery = ""
         }
     }
 
@@ -388,6 +415,20 @@ fun HomeScreen(
                     }
 
                     HomeSection.ReadLater -> {
+                        if (folders.isNotEmpty()) {
+                            item {
+                                FolderChips(
+                                    folders = folders,
+                                    selectedFolder = selectedFolder,
+                                    onFolderSelected = { selectedFolder = it },
+                                    onNewFolder = {
+                                        newFolderName = ""
+                                        showNewFolderDialog = true
+                                    },
+                                )
+                            }
+                        }
+
                         if (uiState.readingItems.isNotEmpty()) {
                             item {
                                 ReadLaterFilterChips(
@@ -423,7 +464,7 @@ fun HomeScreen(
                         } else {
                             item {
                                 SectionHeader(
-                                    title = stringResource(R.string.latest_saved),
+                                    title = selectedFolder ?: stringResource(R.string.latest_saved),
                                     count = 1,
                                 )
                             }
@@ -1145,6 +1186,15 @@ private fun ReadLaterHero(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
                     maxLines = 1,
                 )
+                if (item.folderName != UNFILED_FOLDER_NAME) {
+                    Text(
+                        text = "· ${item.folderName}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -1226,7 +1276,7 @@ private fun ReadingListItem(
         },
         supportingContent = {
             Text(
-                text = "${item.sourceName.ifBlank { item.url.toDisplayHost() }} · ${item.url.toDisplayHost()}",
+                text = item.readingMetadataLabel(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1259,6 +1309,13 @@ private fun ReadingListItem(
             .clickable(onClick = onClick),
     )
 }
+
+private fun ReadingItem.readingMetadataLabel(): String =
+    listOfNotNull(
+        sourceName.ifBlank { url.toDisplayHost() },
+        url.toDisplayHost(),
+        folderName.takeIf { it != UNFILED_FOLDER_NAME },
+    ).joinToString(" · ")
 
 @Composable
 private fun HistoryListItem(

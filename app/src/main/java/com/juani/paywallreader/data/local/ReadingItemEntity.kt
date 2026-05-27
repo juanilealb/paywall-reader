@@ -23,4 +23,11 @@ data class ReadingItemEntity(
     val markdown: String? = null,
     val imageUrl: String? = null,
     val readingProgress: Float = 0f,
+    val folderName: String = "Sin carpeta",
+    val isRead: Boolean = false,
+    val readAt: Long? = null,
+    val isArchived: Boolean = false,
+    val archivedAt: Long? = null,
+    val updatedAt: Long = 0,
+    val captureStatus: String = "ready",
 )

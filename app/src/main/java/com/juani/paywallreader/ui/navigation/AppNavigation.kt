@@ -35,7 +35,6 @@ import androidx.compose.material3.adaptive.layout.rememberPaneExpansionState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -86,16 +85,6 @@ fun AppNavigation(sharedUrl: String? = null) {
     )
     var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var addSourceRequest by rememberSaveable { mutableStateOf(0) }
-    var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(sharedUrl) {
-        val url = sharedUrl?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-        if (url != null && url != consumedSharedUrl) {
-            consumedSharedUrl = url
-            openReaderUrl = url
-            backStack.add(AppRoute.Reader(url, url.toSharedSourceName()))
-        }
-    }
     SideEffect {
         if (!view.isInEditMode) {
             WindowCompat.getInsetsController(
@@ -156,6 +145,7 @@ fun AppNavigation(sharedUrl: String? = null) {
                 ) {
                     HomeRoute(
                         addSourceRequest = addSourceRequest,
+                        pendingSharedUrl = sharedUrl,
                         selectedSourceUrl = openReaderUrl,
                         showAddSourceFab = !isMultiPaneWidth,
                         showBottomControls = isMultiPaneWidth || openReaderUrl == null,
@@ -291,10 +281,3 @@ private fun ReaderPlaceholder(
         }
     }
 }
-
-private fun String.toSharedSourceName(): String =
-    removePrefix("https://")
-        .removePrefix("http://")
-        .substringBefore("/")
-        .removePrefix("www.")
-        .ifBlank { this }

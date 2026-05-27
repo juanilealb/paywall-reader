@@ -101,6 +101,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveSharedUrl(url: String) {
+        viewModelScope.launch {
+            repository.saveBookmarkFromExternalShare(url)
+        }
+    }
+
     fun recordVisit(title: String, url: String, sourceName: String) {
         viewModelScope.launch {
             repository.recordVisit(title, url, sourceName)

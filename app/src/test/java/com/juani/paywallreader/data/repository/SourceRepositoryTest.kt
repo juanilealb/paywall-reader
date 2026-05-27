@@ -9,6 +9,8 @@ import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -173,6 +175,53 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `external shared urls are saved once as pending read later bookmarks`() = runTest {
+        repository.saveBookmarkFromExternalShare(" https://example.com/article ")
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals("https://example.com/article", item.url)
+        assertEquals("example.com", item.title)
+        assertEquals("example.com", item.sourceName)
+        assertEquals(UNFILED_FOLDER_NAME, item.folderName)
+        assertEquals("pending", item.captureStatus)
+    }
+
+    @Test
+    fun `moveBookmarkToFolder updates bookmark folder and exposes it in folders`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.moveBookmarkToFolder(" https://example.com/article ", " Long Reads ")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals("Long Reads", item.folderName)
+        assertEquals(listOf("Long Reads"), repository.folders.first())
+    }
+
+    @Test
+    fun `deleteFolder moves matching bookmarks to unfiled`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article", folderName = "Long Reads")
+
+        repository.deleteFolder("Long Reads")
+
+        assertEquals(UNFILED_FOLDER_NAME, sourceDao.readingItems.value.single().folderName)
+        assertEquals(listOf(UNFILED_FOLDER_NAME), repository.folders.first())
+    }
+
+    @Test
+    fun `markRead keeps read later item and records read state`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.markRead("https://example.com/article")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals("https://example.com/article", item.url)
+        assertTrue(item.isRead)
+        assertTrue(item.readAt != null)
+        assertTrue(item.updatedAt >= item.readAt!!)
+    }
+
+    @Test
     fun `clearHistory removes all history items`() = runTest {
         repository.recordVisit("First", "https://example.com/first", "Example")
         repository.recordVisit("Second", "https://example.com/second", "Example")
@@ -196,7 +245,20 @@ private class FakeSourceDao : SourceDao {
 
     override fun getFolders(): Flow<List<FolderEntity>> = folders
 
-    override fun getReadingItems(): Flow<List<ReadingItemEntity>> = readingItems
+    override fun getReadingItems(): Flow<List<ReadingItemEntity>> =
+        readingItems.map { items -> items.filterNot { it.isArchived }.sortedByDescending { it.addedAt } }
+
+    override fun getReadingItemFolders(): Flow<List<String>> =
+        readingItems.map { items ->
+            items
+                .filterNot { it.isArchived }
+                .map { it.folderName }
+                .distinct()
+                .sortedBy { it.lowercase() }
+        }
+
+    override suspend fun getReadingItemByUrl(url: String): ReadingItemEntity? =
+        readingItems.value.firstOrNull { it.url == url }
 
     override fun getHistoryItems(): Flow<List<HistoryEntity>> = historyItems
 
@@ -247,6 +309,16 @@ private class FakeSourceDao : SourceDao {
         }
     }
 
+    override suspend fun moveReadingItemsToFolder(folderName: String, targetFolder: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.folderName == folderName) {
+                item.copy(folderName = targetFolder, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
     override suspend fun delete(source: SourceEntity) {
         entities.value = entities.value.filterNot { it.id == source.id }
     }
@@ -264,8 +336,39 @@ private class FakeSourceDao : SourceDao {
     override suspend fun count(): Int = entities.value.size
 
     override suspend fun upsertReadingItem(item: ReadingItemEntity) {
-        val entity = item.copy(id = item.id.takeIf { it != 0L } ?: nextReadingId++)
+        val existing = readingItems.value.firstOrNull { it.url == item.url }
+        val entity = item.copy(id = item.id.takeIf { it != 0L } ?: existing?.id ?: nextReadingId++)
         readingItems.value = readingItems.value.filterNot { it.url == item.url } + entity
+    }
+
+    override suspend fun markReadingItemRead(url: String, readAt: Long, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(isRead = true, readAt = readAt, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun archiveReadingItem(url: String, archivedAt: Long, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(isArchived = true, archivedAt = archivedAt, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun moveReadingItemToFolder(url: String, folderName: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(folderName = folderName, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
     }
 
     override suspend fun deleteReadingItem(url: String) {
@@ -274,6 +377,9 @@ private class FakeSourceDao : SourceDao {
 
     override suspend fun countReadingItem(url: String): Int =
         readingItems.value.count { it.url == url }
+
+    override suspend fun countReadingItemsByFolder(folderName: String): Int =
+        readingItems.value.count { it.folderName == folderName && !it.isArchived }
 
     override suspend fun insertHistoryItem(item: HistoryEntity): Long {
         val entity = item.copy(id = item.id.takeIf { it != 0L } ?: nextHistoryId++)
