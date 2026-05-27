@@ -1,5 +1,6 @@
 package com.juani.paywallreader.ui.reader
 
+import android.content.Context
 import android.content.Intent
 import android.app.Application
 import android.graphics.Bitmap
@@ -15,6 +16,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -85,6 +87,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 private val FoldFloatingActionButtonSize = 64.dp
@@ -186,8 +190,31 @@ fun ReaderScreen(
         }
     }
     val saveCurrentForLater = {
-        val url = (webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl()
-        onSaveForLater(currentTitle.ifBlank { sourceName }, url, sourceName)
+        val view = webView
+        val resolvedUrl = view?.url ?: currentUrl.ifBlank { sourceUrl }
+        val originalUrl = resolvedUrl.toOriginalArticleUrl()
+        val title = currentTitle.ifBlank { sourceName }
+        onSaveForLater(title, originalUrl, sourceName)
+        if (view == null) {
+            context.sendToAfterlight(
+                title = title,
+                source = sourceName,
+                originalUrl = originalUrl,
+                resolvedUrl = resolvedUrl,
+            )
+        } else {
+            view.evaluateJavascript(AFTERLIGHT_CAPTURE_SCRIPT) { rawPayload ->
+                val payload = rawPayload.decodeAfterlightPayload()
+                context.sendToAfterlight(
+                    title = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: title,
+                    source = sourceName,
+                    originalUrl = originalUrl,
+                    resolvedUrl = resolvedUrl,
+                    html = payload?.optString("html")?.takeIf { it.isNotBlank() },
+                    text = payload?.optString("text")?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
     }
     val markCurrentRead = {
         onMarkRead((webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl())
@@ -734,6 +761,18 @@ private fun ReaderToolbarActions(
     }
 }
 
+private const val AFTERLIGHT_PACKAGE = "com.juani.afterlight"
+private const val AFTERLIGHT_SAVE_ARTICLE_ACTION = "com.juani.afterlight.SAVE_ARTICLE"
+private val AFTERLIGHT_CAPTURE_SCRIPT = """
+    (function() {
+        return JSON.stringify({
+            title: document.title || '',
+            html: document.documentElement ? document.documentElement.outerHTML : '',
+            text: document.body ? document.body.innerText : ''
+        });
+    })();
+""".trimIndent()
+
 private const val REMOVE_PAYWALLS_HOST = "removepaywalls.com"
 private const val PERISCOPE_HOST = "periscope.corsfix.com"
 private const val ARTICLE_READER_HOST = "accessarticlenow.com"
@@ -783,6 +822,42 @@ private val BLOCKED_AD_PATH_PARTS = listOf(
     "/gampad/",
     "/securepubads.",
 )
+
+private fun String?.decodeAfterlightPayload(): JSONObject? = runCatching {
+    val decoded = JSONArray("[${this ?: "null"}]").optString(0)
+    JSONObject(decoded)
+}.getOrNull()
+
+private fun Context.sendToAfterlight(
+    title: String,
+    source: String,
+    originalUrl: String,
+    resolvedUrl: String,
+    html: String? = null,
+    text: String? = null,
+) {
+    val explicitIntent = Intent(AFTERLIGHT_SAVE_ARTICLE_ACTION).apply {
+        setPackage(AFTERLIGHT_PACKAGE)
+        putExtra("title", title)
+        putExtra("source", source)
+        putExtra("originalUrl", originalUrl)
+        putExtra("resolvedUrl", resolvedUrl)
+        html?.let { putExtra("html", it) }
+        text?.let { putExtra("text", it) }
+    }
+    if (explicitIntent.resolveActivity(packageManager) != null) {
+        startActivity(explicitIntent)
+        Toast.makeText(this, "Guardado para la noche", Toast.LENGTH_SHORT).show()
+    } else {
+        val fallback = Intent(Intent.ACTION_SEND).apply {
+            type = if (!html.isNullOrBlank()) "text/html" else "text/plain"
+            putExtra(Intent.EXTRA_TITLE, title)
+            putExtra(Intent.EXTRA_TEXT, text ?: originalUrl)
+            html?.let { putExtra(Intent.EXTRA_HTML_TEXT, it) }
+        }
+        startActivity(Intent.createChooser(fallback, "Enviar a Afterlight"))
+    }
+}
 
 private fun Uri.toArticleReaderUrl(): String =
     "https://$ARTICLE_READER_HOST/api/c/full?q=${Uri.encode(toString())}"
