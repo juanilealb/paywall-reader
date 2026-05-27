@@ -11,7 +11,9 @@ import com.juani.paywallreader.domain.model.Source
 import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
 import com.juani.paywallreader.domain.model.validateSourceUrl
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import java.net.URI
 
 class SourceRepository(
     private val sourceDao: SourceDao,
@@ -20,11 +22,17 @@ class SourceRepository(
         entities.map { it.toDomain() }
     }
 
-    val folders: Flow<List<String>> = sourceDao.getFolders().map { entities ->
-        entities
-            .map { it.name.normalizedFolderName() }
+    val folders: Flow<List<String>> = combine(
+        sourceDao.getFolders(),
+        sourceDao.getReadingItemFolders(),
+    ) { entities, readingItemFolders ->
+        (entities.map { it.name.normalizedFolderName() } + readingItemFolders.map { it.normalizedFolderName() })
             .distinct()
-            .filterNot { it == UNFILED_FOLDER_NAME && sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 }
+            .filterNot {
+                it == UNFILED_FOLDER_NAME &&
+                    sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 &&
+                    sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0
+            }
             .sortedBy { it.lowercase() }
     }
 
@@ -70,6 +78,11 @@ class SourceRepository(
             folderName = normalizedFolderName,
             targetFolder = UNFILED_FOLDER_NAME,
         )
+        sourceDao.moveReadingItemsToFolder(
+            folderName = normalizedFolderName,
+            targetFolder = UNFILED_FOLDER_NAME,
+            updatedAt = System.currentTimeMillis(),
+        )
         sourceDao.deleteFolder(normalizedFolderName)
     }
 
@@ -109,12 +122,16 @@ class SourceRepository(
     ) {
         val validatedUrl = validateSourceUrl(url)
         if (!validatedUrl.isValid) return
+        val now = System.currentTimeMillis()
+        val existing = sourceDao.getReadingItemByUrl(validatedUrl.normalizedUrl)
 
         sourceDao.upsertReadingItem(
             ReadingItemEntity(
+                id = existing?.id ?: 0,
                 title = title.trim().ifBlank { validatedUrl.normalizedUrl.toDisplayTitle() },
                 url = validatedUrl.normalizedUrl,
                 sourceName = sourceName.ifBlank { validatedUrl.normalizedUrl.toDisplayTitle() },
+                addedAt = existing?.addedAt ?: now,
                 resolvedUrl = resolvedUrl?.trim()?.takeIf { it.isNotBlank() },
                 author = author?.trim()?.takeIf { it.isNotBlank() },
                 excerpt = excerpt?.trim()?.takeIf { it.isNotBlank() },
@@ -122,14 +139,71 @@ class SourceRepository(
                 text = text?.trim()?.takeIf { it.isNotBlank() },
                 markdown = markdown?.trim()?.takeIf { it.isNotBlank() },
                 imageUrl = imageUrl?.trim()?.takeIf { it.isNotBlank() },
+                folderName = existing?.folderName ?: UNFILED_FOLDER_NAME,
+                isRead = existing?.isRead ?: false,
+                readAt = existing?.readAt,
+                isArchived = false,
+                archivedAt = null,
+                updatedAt = now,
+                captureStatus = "ready",
             ),
         )
+    }
+
+    suspend fun saveBookmarkFromExternalShare(
+        url: String,
+        folderName: String = UNFILED_FOLDER_NAME,
+    ) {
+        val validatedUrl = validateSourceUrl(url)
+        if (!validatedUrl.isValid) return
+        val normalizedUrl = validatedUrl.normalizedUrl
+        val now = System.currentTimeMillis()
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName != UNFILED_FOLDER_NAME) {
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        }
+        val displayTitle = normalizedUrl.toDisplayTitle()
+        val existing = sourceDao.getReadingItemByUrl(normalizedUrl)
+
+        sourceDao.upsertReadingItem(
+            existing?.copy(
+                folderName = normalizedFolderName,
+                isArchived = false,
+                archivedAt = null,
+                updatedAt = now,
+            ) ?: ReadingItemEntity(
+                title = displayTitle,
+                url = normalizedUrl,
+                sourceName = normalizedUrl.toHostName().ifBlank { displayTitle },
+                addedAt = now,
+                folderName = normalizedFolderName,
+                updatedAt = now,
+                captureStatus = "pending",
+            ),
+        )
+    }
+
+    suspend fun moveBookmarkToFolder(url: String, folderName: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (!validatedUrl.isValid) return
+
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName != UNFILED_FOLDER_NAME) {
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        }
+        sourceDao.moveReadingItemToFolder(
+            url = validatedUrl.normalizedUrl,
+            folderName = normalizedFolderName,
+            updatedAt = System.currentTimeMillis(),
+        )
+        pruneEmptyUnfiledFolder()
     }
 
     suspend fun markRead(url: String) {
         val validatedUrl = validateSourceUrl(url)
         if (validatedUrl.isValid) {
-            sourceDao.deleteReadingItem(validatedUrl.normalizedUrl)
+            val now = System.currentTimeMillis()
+            sourceDao.markReadingItemRead(validatedUrl.normalizedUrl, readAt = now, updatedAt = now)
         }
     }
 
@@ -152,7 +226,10 @@ class SourceRepository(
     }
 
     private suspend fun pruneEmptyUnfiledFolder() {
-        if (sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0) {
+        if (
+            sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 &&
+            sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0
+        ) {
             sourceDao.deleteFolder(UNFILED_FOLDER_NAME)
         }
     }
@@ -191,6 +268,13 @@ private fun ReadingItemEntity.toDomain(): ReadingItem =
         markdown = markdown,
         imageUrl = imageUrl,
         readingProgress = readingProgress,
+        folderName = folderName.normalizedFolderName(),
+        isRead = isRead,
+        readAt = readAt,
+        isArchived = isArchived,
+        archivedAt = archivedAt,
+        updatedAt = updatedAt,
+        captureStatus = captureStatus,
     )
 
 private fun HistoryEntity.toDomain(): HistoryItem =
@@ -210,3 +294,6 @@ private fun String.toDisplayTitle(): String =
         .removePrefix("http://")
         .substringBefore("/")
         .removePrefix("www.")
+
+private fun String.toHostName(): String =
+    runCatching { URI(this).host.orEmpty().removePrefix("www.") }.getOrDefault("")

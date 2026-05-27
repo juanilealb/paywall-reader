@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .addCallback(DefaultSourcesCallback())
                 .build()
@@ -136,6 +137,18 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN markdown TEXT")
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN imageUrl TEXT")
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN readingProgress REAL NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN folderName TEXT NOT NULL DEFAULT 'Sin carpeta'")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN isRead INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN readAt INTEGER")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN archivedAt INTEGER")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN captureStatus TEXT NOT NULL DEFAULT 'ready'")
             }
         }
     }

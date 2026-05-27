@@ -24,6 +24,13 @@ data class ReadingItem(
     val markdown: String? = null,
     val imageUrl: String? = null,
     val readingProgress: Float = 0f,
+    val folderName: String = UNFILED_FOLDER_NAME,
+    val isRead: Boolean = false,
+    val readAt: Long? = null,
+    val isArchived: Boolean = false,
+    val archivedAt: Long? = null,
+    val updatedAt: Long = 0,
+    val captureStatus: String = "ready",
 )
 
 data class HistoryItem(
