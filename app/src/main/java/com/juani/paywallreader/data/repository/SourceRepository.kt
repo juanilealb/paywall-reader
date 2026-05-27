@@ -250,6 +250,29 @@ class SourceRepository(
         }
     }
 
+    suspend fun markUnread(url: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (validatedUrl.isValid) {
+            sourceDao.markReadingItemUnread(validatedUrl.normalizedUrl, updatedAt = System.currentTimeMillis())
+        }
+    }
+
+    suspend fun archiveBookmark(url: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (validatedUrl.isValid) {
+            val now = System.currentTimeMillis()
+            sourceDao.archiveReadingItem(validatedUrl.normalizedUrl, archivedAt = now, updatedAt = now)
+            pruneEmptyUnfiledFolder()
+        }
+    }
+
+    suspend fun restoreBookmark(url: String) {
+        val validatedUrl = validateSourceUrl(url)
+        if (validatedUrl.isValid) {
+            sourceDao.restoreReadingItem(validatedUrl.normalizedUrl, updatedAt = System.currentTimeMillis())
+        }
+    }
+
     suspend fun recordVisit(title: String, url: String, sourceName: String) {
         val validatedUrl = validateSourceUrl(url)
         if (!validatedUrl.isValid) return
