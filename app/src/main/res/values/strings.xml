@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">PaywallReader</string>
-    <string name="home_title">Mis Fuentes</string>
-    <string name="home_subtitle">Tus diarios y portales listos para leer con menos fricción.</string>
-    <string name="saved_sources_count">%1$d fuentes guardadas</string>
+    <string name="home_title">Mi Biblioteca</string>
+    <string name="home_subtitle">Fuentes, lecturas guardadas e historial en un reader sin distracciones.</string>
+    <string name="saved_sources_count">%1$d fuentes en tu biblioteca</string>
     <string name="add_source">Agregar fuente</string>
     <string name="add_source_from_clipboard">Pegar URL</string>
     <string name="add_source_subtitle">Guardá el sitio una vez y volvé a leerlo desde la lista.</string>
@@ -28,7 +28,7 @@
     <string name="delete_source_message">¿Querés eliminar esta fuente?</string>
     <string name="source_options">Opciones de fuente</string>
     <string name="all_sources">Todas</string>
-    <string name="read_later">Read later</string>
+    <string name="read_later">Lecturas</string>
     <string name="history">Historial</string>
     <string name="new_folder">Nueva carpeta</string>
     <string name="delete_folder">Eliminar carpeta</string>
@@ -37,14 +37,14 @@
     <string name="empty_search_title">Sin resultados</string>
     <string name="empty_search_subtitle">Probá con otro nombre, dominio o carpeta.</string>
     <string name="empty_read_later">Sin lecturas guardadas</string>
-    <string name="empty_read_later_subtitle">Cuando estés leyendo, tocá el marcador para sumar artículos acá.</string>
+    <string name="empty_read_later_subtitle">Cuando estés leyendo, tocá guardar lectura para sumar artículos acá.</string>
     <string name="empty_history">Sin historial</string>
     <string name="empty_history_subtitle">Las páginas que abras desde la app aparecen acá.</string>
     <string name="clear_history">Limpiar historial</string>
     <string name="clear_history_title">Limpiar historial</string>
     <string name="clear_history_message">Se van a borrar las páginas recientes de esta app.</string>
-    <string name="latest_saved">Lo último guardado</string>
-    <string name="more_articles">Más artículos</string>
+    <string name="latest_saved">Últimas lecturas</string>
+    <string name="more_articles">Más lecturas</string>
     <string name="history_recent">Reciente</string>
     <string name="mark_read">Marcar como leído</string>
     <string name="reader_loading">Cargando página…</string>
@@ -57,7 +57,7 @@
     <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
     <string name="reader_open_reader">Buscar en archive.ph</string>
-    <string name="reader_save_later">Guardar para la noche</string>
+    <string name="reader_save_later">Guardar lectura</string>
     <string name="reader_mark_read">Leído</string>
     <string name="reader_close_page">Cerrar página</string>
     <string name="reader_share">Compartir</string>

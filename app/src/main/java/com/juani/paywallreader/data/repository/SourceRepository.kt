@@ -95,7 +95,18 @@ class SourceRepository(
         pruneEmptyUnfiledFolder()
     }
 
-    suspend fun saveForLater(title: String, url: String, sourceName: String) {
+    suspend fun saveForLater(
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String? = null,
+        author: String? = null,
+        excerpt: String? = null,
+        html: String? = null,
+        text: String? = null,
+        markdown: String? = null,
+        imageUrl: String? = null,
+    ) {
         val validatedUrl = validateSourceUrl(url)
         if (!validatedUrl.isValid) return
 
@@ -104,6 +115,13 @@ class SourceRepository(
                 title = title.trim().ifBlank { validatedUrl.normalizedUrl.toDisplayTitle() },
                 url = validatedUrl.normalizedUrl,
                 sourceName = sourceName.ifBlank { validatedUrl.normalizedUrl.toDisplayTitle() },
+                resolvedUrl = resolvedUrl?.trim()?.takeIf { it.isNotBlank() },
+                author = author?.trim()?.takeIf { it.isNotBlank() },
+                excerpt = excerpt?.trim()?.takeIf { it.isNotBlank() },
+                html = html?.trim()?.takeIf { it.isNotBlank() },
+                text = text?.trim()?.takeIf { it.isNotBlank() },
+                markdown = markdown?.trim()?.takeIf { it.isNotBlank() },
+                imageUrl = imageUrl?.trim()?.takeIf { it.isNotBlank() },
             ),
         )
     }
@@ -165,6 +183,14 @@ private fun ReadingItemEntity.toDomain(): ReadingItem =
         url = url,
         sourceName = sourceName,
         addedAt = addedAt,
+        resolvedUrl = resolvedUrl,
+        author = author,
+        excerpt = excerpt,
+        html = html,
+        text = text,
+        markdown = markdown,
+        imageUrl = imageUrl,
+        readingProgress = readingProgress,
     )
 
 private fun HistoryEntity.toDomain(): HistoryItem =

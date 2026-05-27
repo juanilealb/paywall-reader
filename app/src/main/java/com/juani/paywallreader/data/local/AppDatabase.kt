@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +27,14 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "paywall_reader.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                )
                 .addCallback(DefaultSourcesCallback())
                 .build()
 
@@ -116,6 +123,19 @@ abstract class AppDatabase : RoomDatabase() {
                     WHERE NOT EXISTS (SELECT 1 FROM sources WHERE url = '${SUBSTACK_SOURCE.url}')
                     """.trimIndent(),
                 )
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN resolvedUrl TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN author TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN excerpt TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN html TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN text TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN markdown TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN imageUrl TEXT")
+                db.execSQL("ALTER TABLE reading_items ADD COLUMN readingProgress REAL NOT NULL DEFAULT 0")
             }
         }
     }

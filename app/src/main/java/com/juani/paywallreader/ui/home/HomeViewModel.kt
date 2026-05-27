@@ -67,9 +67,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveForLater(title: String, url: String, sourceName: String) {
+    fun saveForLater(
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String? = null,
+        author: String? = null,
+        excerpt: String? = null,
+        html: String? = null,
+        text: String? = null,
+        markdown: String? = null,
+        imageUrl: String? = null,
+    ) {
         viewModelScope.launch {
-            repository.saveForLater(title, url, sourceName)
+            repository.saveForLater(
+                title = title,
+                url = url,
+                sourceName = sourceName,
+                resolvedUrl = resolvedUrl,
+                author = author,
+                excerpt = excerpt,
+                html = html,
+                text = text,
+                markdown = markdown,
+                imageUrl = imageUrl,
+            )
         }
     }
 
