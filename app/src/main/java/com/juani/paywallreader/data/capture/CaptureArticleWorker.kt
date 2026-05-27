@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.juani.paywallreader.data.local.AppDatabase
+import com.juani.paywallreader.data.reader.captureProviderKey
 import com.juani.paywallreader.data.repository.SourceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,6 +41,7 @@ class CaptureArticleWorker(
                 text = article.text,
                 markdown = article.markdown,
                 imageUrl = article.imageUrl,
+                captureProvider = article.resolvedUrl.captureProviderKey(),
             )
             Result.success()
         } catch (throwable: Throwable) {

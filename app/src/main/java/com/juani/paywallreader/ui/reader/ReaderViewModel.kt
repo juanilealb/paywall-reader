@@ -23,6 +23,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         text: String? = null,
         markdown: String? = null,
         imageUrl: String? = null,
+        captureProvider: String? = null,
     ) {
         viewModelScope.launch {
             repository.saveForLater(
@@ -36,6 +37,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 text = text,
                 markdown = markdown,
                 imageUrl = imageUrl,
+                captureProvider = captureProvider.orEmpty(),
             )
         }
     }

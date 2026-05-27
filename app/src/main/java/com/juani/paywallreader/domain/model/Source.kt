@@ -35,6 +35,7 @@ data class ReadingItem(
     val archivedAt: Long? = null,
     val updatedAt: Long = 0,
     val captureStatus: String = "ready",
+    val captureProvider: String = "original",
     val captureAttemptCount: Int = 0,
     val captureLastAttemptAt: Long? = null,
     val captureLastError: String? = null,
