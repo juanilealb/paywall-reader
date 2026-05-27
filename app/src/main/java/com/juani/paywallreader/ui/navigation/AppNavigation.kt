@@ -84,7 +84,6 @@ fun AppNavigation(sharedUrl: String? = null) {
         paneExpansionState = listDetailPaneExpansionState,
     )
     var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
-    var autoCaptureReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var addSourceRequest by rememberSaveable { mutableStateOf(0) }
     SideEffect {
         if (!view.isInEditMode) {
@@ -150,13 +149,7 @@ fun AppNavigation(sharedUrl: String? = null) {
                         selectedSourceUrl = openReaderUrl,
                         showAddSourceFab = !isMultiPaneWidth,
                         showBottomControls = isMultiPaneWidth || openReaderUrl == null,
-                        onSharedUrlOpen = { url ->
-                            openReaderUrl = url
-                            autoCaptureReaderUrl = url
-                            backStack.add(AppRoute.Reader(url, url))
-                        },
                         onSourceClick = { source ->
-                            autoCaptureReaderUrl = null
                             openReaderUrl = source.url
                             backStack.add(AppRoute.Reader(source.url, source.name))
                         },
@@ -168,8 +161,6 @@ fun AppNavigation(sharedUrl: String? = null) {
                     ReaderRoute(
                         sourceName = route.name.ifBlank { route.url },
                         sourceUrl = route.url,
-                        autoCaptureUrl = autoCaptureReaderUrl?.takeIf { it == route.url },
-                        onAutoCaptureComplete = { autoCaptureReaderUrl = null },
                         onBack = { closeReader() },
                         showBackButton = !isMultiPaneWidth,
                     )

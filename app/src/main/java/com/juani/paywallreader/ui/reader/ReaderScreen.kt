@@ -114,6 +114,145 @@ private val ReaderToolbarActionSize = 48.dp
 private val ReaderToolbarIconSize = 22.dp
 
 @Composable
+fun HeadlessArticleCaptureHost(
+    captureUrl: String?,
+    onSaveForLater: (
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String?,
+        author: String?,
+        excerpt: String?,
+        html: String?,
+        text: String?,
+        markdown: String?,
+        imageUrl: String?,
+    ) -> Unit,
+    onCaptureStatusChange: (url: String, status: String) -> Unit,
+    onCaptureComplete: (url: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val urlToCapture = captureUrl?.trim()?.takeIf { it.isLikelyWebUrl() } ?: return
+    key(urlToCapture) {
+        var webView by remember { mutableStateOf<WebView?>(null) }
+        AndroidView(
+            modifier = modifier.size(1.dp),
+            factory = { context ->
+                var captureStarted = false
+                var captureFinished = false
+                val originalUrl = urlToCapture.toOriginalArticleUrl()
+
+                WebView(context).apply {
+                    alpha = 0f
+                    configureReaderSettings(useBrowserUserAgent = urlToCapture.isBlogAuthHost())
+                    webChromeClient = WebChromeClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            if (!captureStarted) {
+                                onCaptureStatusChange(originalUrl, CAPTURE_STATUS_CAPTURING)
+                            }
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            val resolvedUrl = url ?: view?.url ?: urlToCapture
+                            CookieManager.getInstance().flush()
+                            view?.applyAdCleanup()
+                            view?.applySiteChromeCleanup()
+                            view?.postDelayed({ view.applySiteChromeCleanup() }, 700L)
+                            view?.postDelayed({ view.applySiteChromeCleanup() }, 1_800L)
+                            if (resolvedUrl.isReaderServiceUrl()) {
+                                view?.applyReaderChrome()
+                                view?.postDelayed({ view.applyReaderChrome() }, 700L)
+                                view?.loadFallbackReaderIfBlank(resolvedUrl, 2_500L)
+                            }
+                            view?.loadFallbackReaderIfPaywalled(resolvedUrl, 2_500L)
+
+                            if (!captureStarted) {
+                                captureStarted = true
+                                val captureOriginalUrl = resolvedUrl.toOriginalArticleUrl()
+                                onCaptureStatusChange(captureOriginalUrl, CAPTURE_STATUS_CAPTURING)
+                                view?.postDelayed(
+                                    {
+                                        if (captureFinished) return@postDelayed
+                                        captureFinished = true
+                                        captureHeadlessArticle(
+                                            sourceUrl = urlToCapture,
+                                            sourceName = captureOriginalUrl.toDisplaySourceName(),
+                                            onSaveForLater = onSaveForLater,
+                                            onCaptured = { onCaptureComplete(captureOriginalUrl) },
+                                        )
+                                    },
+                                    1_200L,
+                                )
+                                view?.postDelayed(
+                                    {
+                                        if (!captureFinished) {
+                                            captureFinished = true
+                                            onCaptureStatusChange(captureOriginalUrl, CAPTURE_STATUS_FAILED)
+                                            onCaptureComplete(captureOriginalUrl)
+                                        }
+                                    },
+                                    12_000L,
+                                )
+                            }
+                        }
+
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                        ): Boolean {
+                            if (request?.isForMainFrame != true) return false
+                            val requestUrl = request.url
+                            val scheme = requestUrl.scheme
+                            if (scheme != "http" && scheme != "https") return true
+                            if (requestUrl.isNewYorkTimesHost() && !requestUrl.isReaderServiceUrl()) {
+                                view?.loadUrl(requestUrl.toPeriscopeUrl())
+                                return true
+                            }
+                            return false
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?,
+                        ) {
+                            if (request?.isForMainFrame == true && !captureFinished) {
+                                captureFinished = true
+                                onCaptureStatusChange(originalUrl, CAPTURE_STATUS_FAILED)
+                                onCaptureComplete(originalUrl)
+                            }
+                        }
+
+                        override fun shouldInterceptRequest(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                        ): WebResourceResponse? {
+                            val requestUri = request?.url ?: return null
+                            return if (!request.isForMainFrame && requestUri.isBlockedAdResource()) {
+                                emptyWebResponse()
+                            } else {
+                                null
+                            }
+                        }
+                    }
+                    webView = this
+                    loadUrl(urlToCapture.toPreferredReaderUrl())
+                }
+            },
+            update = {},
+        )
+        DisposableEffect(urlToCapture) {
+            onDispose {
+                webView?.stopLoading()
+                webView?.destroy()
+                webView = null
+            }
+        }
+    }
+}
+
+@Composable
 fun ReaderRoute(
     sourceName: String,
     sourceUrl: String,
@@ -882,6 +1021,51 @@ private fun String?.decodeArticleCapturePayload(): JSONObject? = runCatching {
     val decoded = JSONArray("[${this ?: "null"}]").optString(0)
     JSONObject(decoded)
 }.getOrNull()
+
+private fun WebView.captureHeadlessArticle(
+    sourceUrl: String,
+    sourceName: String,
+    onSaveForLater: (
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String?,
+        author: String?,
+        excerpt: String?,
+        html: String?,
+        text: String?,
+        markdown: String?,
+        imageUrl: String?,
+    ) -> Unit,
+    onCaptured: () -> Unit,
+) {
+    val resolvedUrl = url ?: sourceUrl
+    val originalUrl = resolvedUrl.toOriginalArticleUrl()
+    val fallbackTitle = title?.takeIf { it.isNotBlank() } ?: originalUrl.toDisplaySourceName()
+    evaluateJavascript(ARTICLE_CAPTURE_SCRIPT) { rawPayload ->
+        val payload = rawPayload.decodeArticleCapturePayload()
+        val capturedTitle = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: fallbackTitle
+        val capturedText = payload?.optString("text")?.takeIf { it.isNotBlank() }
+        onSaveForLater(
+            capturedTitle,
+            originalUrl,
+            sourceName.ifBlank { originalUrl.toDisplaySourceName() },
+            resolvedUrl,
+            payload?.optString("author")?.takeIf { it.isNotBlank() },
+            payload?.optString("excerpt")?.takeIf { it.isNotBlank() },
+            payload?.optString("html")?.takeIf { it.isNotBlank() },
+            capturedText,
+            capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
+            payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
+        )
+        onCaptured()
+    }
+}
+
+private fun String.toDisplaySourceName(): String =
+    runCatching {
+        Uri.parse(this).host.orEmpty().removePrefix("www.").ifBlank { this }
+    }.getOrDefault(this)
 
 private fun String.toBasicMarkdown(title: String, url: String): String = buildString {
     appendLine("# ${title.trim().ifBlank { url }}")

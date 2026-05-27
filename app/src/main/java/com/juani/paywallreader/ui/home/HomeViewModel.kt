@@ -115,6 +115,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateCaptureStatus(url: String, status: String) {
+        viewModelScope.launch {
+            repository.updateCaptureStatus(url, status)
+        }
+    }
+
     fun recordVisit(title: String, url: String, sourceName: String) {
         viewModelScope.launch {
             repository.recordVisit(title, url, sourceName)
