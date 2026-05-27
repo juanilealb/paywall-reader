@@ -4,7 +4,7 @@
 
 **Goal:** Keep paywall-reader as a two-mode app: (1) read pages with the existing paywall-bypass/intelligent fallback behavior, and (2) save durable bookmarks as beautiful distraction-free markdown/text, including links shared from outside the app.
 
-**Architecture:** Keep the current WebView/paywall-bypass reader as the live reading surface. Add a capture pipeline that can take either the currently-open readable page or an external share URL, run it through the same intelligent reader/paywall fallback path, extract the resulting readable document to markdown, store immutable bookmark records, and render saved markdown in a sober Obsidian/Defuddle-style reader.
+**Architecture:** Keep the current WebView/paywall-bypass reader as the live reading surface. Add a capture pipeline that can take either the currently-open readable page or an external share URL, run it through the same intelligent reader/paywall fallback path, extract the resulting readable document to markdown, store immutable bookmark records, and render saved markdown in a sober Defuddle-style reader.
 
 **Tech Stack:** Android/Kotlin, Jetpack Compose, Material 3 Expressive, Room, WebView for optional page loading, Defuddle-inspired extraction via a small service/module, existing repository/DAO patterns.
 
@@ -233,9 +233,9 @@ Clean article markdown...
 
 ---
 
-## PR6 — Preserve and formalize paywall-bypass reader defaults
+## PR6 — Preserve paywall-bypass by default and reuse it for bookmark capture
 
-**Goal:** Keep paywall bypass as a first-class default capability for live reading and make it reusable by bookmark capture.
+**Goal:** Keep paywall bypass as a first-class default capability for live reading and make it reusable by bookmark capture. This PR must **not** remove or disable automatic paywall-bypass behavior.
 
 **Files:**
 - Modify: `ReaderScreen.kt`
@@ -246,6 +246,7 @@ Clean article markdown...
 **Acceptance criteria:**
 - Automatic routing/fallback through Periscope/accessarticlenow/unwall/archive remains available for normal reading where current behavior uses it.
 - Bookmark capture can invoke the same provider chain headlessly/offscreen.
+- Externally shared URLs go through the same intelligent reader/paywall path before text extraction, then save the cleaned markdown/text bookmark without visibly opening the reader UI.
 - The app has enough intelligence to try the best provider for the domain and fall back if the result is blank/paywalled.
 - Original URL is always preserved.
 
@@ -300,23 +301,6 @@ Clean article markdown...
 
 ---
 
-## PR9 — Obsidian-style export/import boundary (optional after core works)
-
-**Goal:** Let the app export saved bookmarks/markdown in a structure compatible with Obsidian, without requiring Obsidian sync inside the Android app.
-
-**Files:**
-- Create export module.
-- UI for export/share markdown file.
-- Optional folder-to-directory mapping.
-
-**Acceptance criteria:**
-- Export one bookmark as `.md`.
-- Export all or a folder as a zip of `.md` files.
-- Filenames are sanitized and stable.
-- Markdown frontmatter includes original URL and folder.
-
----
-
 # Recommended order
 
 1. PR1 immediately fixes the confusing share behavior.
@@ -327,7 +311,6 @@ Clean article markdown...
 6. PR6 formalizes the paywall-bypass provider chain and makes it reusable by capture.
 7. PR7 adds swipe/archive/read with expressive motion.
 8. PR8 makes capture reliable.
-9. PR9 adds Obsidian-style export if still useful.
 
 # Non-goals
 
@@ -336,6 +319,7 @@ Clean article markdown...
 - No destructive swipe-to-delete.
 - No lossy conversion where original URL/metadata disappear.
 - No opening externally shared URLs immediately in the app.
+- No Obsidian export/import work for now; it is explicitly out of scope.
 
 # Release workflow per PR
 
