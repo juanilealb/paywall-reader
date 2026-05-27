@@ -115,6 +115,8 @@ private val ReaderToolbarIconSize = 22.dp
 fun ReaderRoute(
     sourceName: String,
     sourceUrl: String,
+    autoCaptureUrl: String? = null,
+    onAutoCaptureComplete: () -> Unit = {},
     onBack: () -> Unit,
     showBackButton: Boolean = true,
     modifier: Modifier = Modifier,
@@ -123,6 +125,8 @@ fun ReaderRoute(
     ReaderScreen(
         sourceName = sourceName,
         sourceUrl = sourceUrl,
+        autoCaptureUrl = autoCaptureUrl,
+        onAutoCaptureComplete = onAutoCaptureComplete,
         onBack = onBack,
         showBackButton = showBackButton,
         onSaveForLater = viewModel::saveForLater,
@@ -145,6 +149,8 @@ private fun readerViewModel(): ReaderViewModel {
 fun ReaderScreen(
     sourceName: String,
     sourceUrl: String,
+    autoCaptureUrl: String? = null,
+    onAutoCaptureComplete: () -> Unit = {},
     onBack: () -> Unit,
     showBackButton: Boolean = true,
     onSaveForLater: (
@@ -191,6 +197,7 @@ fun ReaderScreen(
     var isAuthSurface by remember { mutableStateOf(false) }
     var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim().toPreferredReaderUrl()) }
     var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
+    var autoCaptureCompleted by rememberSaveable(sourceUrl, autoCaptureUrl) { mutableStateOf(false) }
     val initialUrl = remember(sourceUrl) {
         sourceUrl.trim().toPreferredReaderUrl()
     }
@@ -215,7 +222,7 @@ fun ReaderScreen(
             webView?.loadUrl(originalUrl.toPreferredReaderUrl(fallbackToOriginal = false))
         }
     }
-    val saveCurrentForLater = {
+    fun captureCurrentForLater(onCaptured: () -> Unit = {}) {
         val view = webView
         val resolvedUrl = view?.url ?: currentUrl.ifBlank { sourceUrl }
         val originalUrl = resolvedUrl.toOriginalArticleUrl()
@@ -233,6 +240,7 @@ fun ReaderScreen(
                 null,
                 null,
             )
+            onCaptured()
         } else {
             view.evaluateJavascript(ARTICLE_CAPTURE_SCRIPT) { rawPayload ->
                 val payload = rawPayload.decodeArticleCapturePayload()
@@ -250,9 +258,11 @@ fun ReaderScreen(
                     capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
                     payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
                 )
+                onCaptured()
             }
         }
     }
+    val saveCurrentForLater = { captureCurrentForLater() }
     val markCurrentRead = {
         onMarkRead((webView?.url ?: currentUrl.ifBlank { sourceUrl }).toOriginalArticleUrl())
     }
@@ -370,6 +380,13 @@ fun ReaderScreen(
                                 }
                                 if (!isAuthSurface) {
                                     view?.loadFallbackReaderIfPaywalled(url, 2_500L)
+                                }
+                                if (autoCaptureUrl != null && !autoCaptureCompleted) {
+                                    autoCaptureCompleted = true
+                                    view?.postDelayed(
+                                        { captureCurrentForLater(onCaptured = onAutoCaptureComplete) },
+                                        1_200L,
+                                    )
                                 }
                                 val originalUrl = currentUrl.toOriginalArticleUrl()
                                 if (!currentUrl.isReaderServiceUrl() && originalUrl.isLikelyWebUrl()) {

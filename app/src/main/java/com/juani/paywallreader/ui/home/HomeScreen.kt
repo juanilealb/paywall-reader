@@ -112,6 +112,7 @@ fun HomeRoute(
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     showBottomControls: Boolean = true,
+    onSharedUrlOpen: ((String) -> Unit)? = null,
     viewModel: HomeViewModel = homeViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -125,9 +126,14 @@ fun HomeRoute(
         val url = pendingSharedUrl?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         if (url != null && url != consumedSharedUrl) {
             consumedSharedUrl = url
-            viewModel.saveSharedUrl(url)
-            openReadLaterRequest++
-            Toast.makeText(context, "Guardado para leer después", Toast.LENGTH_SHORT).show()
+            if (onSharedUrlOpen != null) {
+                onSharedUrlOpen(url)
+                Toast.makeText(context, "Abriendo y guardando para leer después", Toast.LENGTH_SHORT).show()
+            } else {
+                viewModel.saveSharedUrl(url)
+                openReadLaterRequest++
+                Toast.makeText(context, "Guardado para leer después", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
