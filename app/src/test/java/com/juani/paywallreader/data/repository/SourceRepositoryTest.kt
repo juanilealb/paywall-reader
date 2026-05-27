@@ -281,6 +281,36 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `markUnread clears read state for undo`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+        repository.markRead("https://example.com/article")
+
+        repository.markUnread("https://example.com/article")
+
+        val item = sourceDao.readingItems.value.single()
+        assertEquals(false, item.isRead)
+        assertEquals(null, item.readAt)
+    }
+
+    @Test
+    fun `archive and restore bookmark drive visible read later list`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+
+        repository.archiveBookmark("https://example.com/article")
+
+        assertTrue(repository.readingItems.first().isEmpty())
+        val archived = sourceDao.readingItems.value.single()
+        assertEquals(true, archived.isArchived)
+        assertTrue(archived.archivedAt != null)
+
+        repository.restoreBookmark("https://example.com/article")
+
+        val restored = repository.readingItems.first().single()
+        assertEquals(false, restored.isArchived)
+        assertEquals(null, restored.archivedAt)
+    }
+
+    @Test
     fun `clearHistory removes all history items`() = runTest {
         repository.recordVisit("First", "https://example.com/first", "Example")
         repository.recordVisit("Second", "https://example.com/second", "Example")
@@ -410,10 +440,30 @@ private class FakeSourceDao : SourceDao {
         }
     }
 
+    override suspend fun markReadingItemUnread(url: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(isRead = false, readAt = null, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
     override suspend fun archiveReadingItem(url: String, archivedAt: Long, updatedAt: Long) {
         readingItems.value = readingItems.value.map { item ->
             if (item.url == url) {
                 item.copy(isArchived = true, archivedAt = archivedAt, updatedAt = updatedAt)
+            } else {
+                item
+            }
+        }
+    }
+
+    override suspend fun restoreReadingItem(url: String, updatedAt: Long) {
+        readingItems.value = readingItems.value.map { item ->
+            if (item.url == url) {
+                item.copy(isArchived = false, archivedAt = null, updatedAt = updatedAt)
             } else {
                 item
             }

@@ -103,6 +103,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun markUnread(url: String) {
+        viewModelScope.launch {
+            repository.markUnread(url)
+        }
+    }
+
+    fun setRead(url: String, isRead: Boolean) {
+        viewModelScope.launch {
+            if (isRead) {
+                repository.markRead(url)
+            } else {
+                repository.markUnread(url)
+            }
+        }
+    }
+
+    fun archiveBookmark(url: String) {
+        viewModelScope.launch {
+            repository.archiveBookmark(url)
+        }
+    }
+
+    fun restoreBookmark(url: String) {
+        viewModelScope.launch {
+            repository.restoreBookmark(url)
+        }
+    }
+
     fun saveSharedUrl(url: String) {
         viewModelScope.launch {
             repository.saveBookmarkFromExternalShare(url)

@@ -63,8 +63,14 @@ interface SourceDao {
     @Query("UPDATE reading_items SET isRead = 1, readAt = :readAt, updatedAt = :updatedAt WHERE url = :url")
     suspend fun markReadingItemRead(url: String, readAt: Long, updatedAt: Long)
 
+    @Query("UPDATE reading_items SET isRead = 0, readAt = NULL, updatedAt = :updatedAt WHERE url = :url")
+    suspend fun markReadingItemUnread(url: String, updatedAt: Long)
+
     @Query("UPDATE reading_items SET isArchived = 1, archivedAt = :archivedAt, updatedAt = :updatedAt WHERE url = :url")
     suspend fun archiveReadingItem(url: String, archivedAt: Long, updatedAt: Long)
+
+    @Query("UPDATE reading_items SET isArchived = 0, archivedAt = NULL, updatedAt = :updatedAt WHERE url = :url")
+    suspend fun restoreReadingItem(url: String, updatedAt: Long)
 
     @Query("UPDATE reading_items SET folderName = :folderName, updatedAt = :updatedAt WHERE url = :url")
     suspend fun moveReadingItemToFolder(url: String, folderName: String, updatedAt: Long)

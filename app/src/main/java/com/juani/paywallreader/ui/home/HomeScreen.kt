@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
@@ -44,6 +45,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingToolbarDefaults
@@ -55,9 +57,15 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -175,6 +183,9 @@ fun HomeRoute(
         onAddSource = viewModel::addSource,
         onDeleteSource = viewModel::deleteSource,
         onMarkRead = viewModel::markRead,
+        onSetRead = { item, isRead -> viewModel.setRead(item.url, isRead) },
+        onArchiveItem = { item -> viewModel.archiveBookmark(item.url) },
+        onRestoreItem = { item -> viewModel.restoreBookmark(item.url) },
         onRetryCapture = { item ->
             viewModel.retryCapture(item.url)
             Toast.makeText(context, "Reintento agregado a la cola", Toast.LENGTH_SHORT).show()
@@ -224,7 +235,7 @@ private fun homeViewModel(): HomeViewModel {
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
@@ -234,6 +245,9 @@ fun HomeScreen(
     onAddSource: (name: String, url: String, folderName: String) -> Unit,
     onDeleteSource: (Source) -> Unit,
     onMarkRead: (String) -> Unit,
+    onSetRead: (ReadingItem, Boolean) -> Unit,
+    onArchiveItem: (ReadingItem) -> Unit,
+    onRestoreItem: (ReadingItem) -> Unit,
     onRetryCapture: (ReadingItem) -> Unit,
     onClearHistory: () -> Unit,
     onCreateFolder: (String) -> Unit,
@@ -264,6 +278,35 @@ fun HomeScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    fun showUndoSnackbar(message: String, undo: () -> Unit) {
+        coroutineScope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Deshacer",
+                withDismissAction = true,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                undo()
+            }
+        }
+    }
+
+    fun archiveWithUndo(item: ReadingItem) {
+        onArchiveItem(item)
+        showUndoSnackbar("Archivado", undo = { onRestoreItem(item) })
+    }
+
+    fun toggleReadWithUndo(item: ReadingItem) {
+        val newReadState = !item.isRead
+        onSetRead(item, newReadState)
+        showUndoSnackbar(
+            message = if (newReadState) "Marcado como leído" else "Marcado como no leído",
+            undo = { onSetRead(item, item.isRead) },
+        )
+    }
+
     val folders = remember(uiState.folders, uiState.sources, uiState.readingItems) {
         val hasUnfiledItems = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME } ||
             uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
@@ -327,6 +370,7 @@ fun HomeScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -513,15 +557,22 @@ fun HomeScreen(
                                 )
                             }
                             item {
-                                ReadLaterHero(
-                                    item = visibleReadingItems.first(),
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        onReadingItemClick(visibleReadingItems.first())
-                                    },
-                                    onMarkRead = { onMarkRead(visibleReadingItems.first().url) },
-                                    onRetryCapture = { onRetryCapture(visibleReadingItems.first()) },
-                                )
+                                val heroItem = visibleReadingItems.first()
+                                SwipeableReadingItem(
+                                    item = heroItem,
+                                    onArchive = { archiveWithUndo(heroItem) },
+                                    onToggleRead = { toggleReadWithUndo(heroItem) },
+                                ) {
+                                    ReadLaterHero(
+                                        item = heroItem,
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            onReadingItemClick(heroItem)
+                                        },
+                                        onMarkRead = { onMarkRead(heroItem.url) },
+                                        onRetryCapture = { onRetryCapture(heroItem) },
+                                    )
+                                }
                             }
                             val rest = visibleReadingItems.drop(1)
                             if (rest.isNotEmpty()) {
@@ -539,6 +590,8 @@ fun HomeScreen(
                                             onReadingItemClick(it)
                                         },
                                         onMarkRead = { item -> onMarkRead(item.url) },
+                                        onArchive = { item -> archiveWithUndo(item) },
+                                        onToggleRead = { item -> toggleReadWithUndo(item) },
                                         onRetryCapture = onRetryCapture,
                                     )
                                 }
@@ -1172,6 +1225,77 @@ private fun SectionHeader(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun SwipeableReadingItem(
+    item: ReadingItem,
+    onArchive: () -> Unit,
+    onToggleRead: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> onToggleRead()
+                SwipeToDismissBoxValue.EndToStart -> onArchive()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false
+        },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier.fillMaxWidth(),
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val target = dismissState.targetValue
+            val isArchive = target == SwipeToDismissBoxValue.EndToStart
+            val backgroundColor = if (isArchive) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.tertiaryContainer
+            }
+            val foregroundColor = if (isArchive) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onTertiaryContainer
+            }
+            val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
+            val icon = if (isArchive) Icons.Rounded.Archive else Icons.Rounded.Check
+            val label = if (isArchive) {
+                "Archivar"
+            } else if (item.isRead) {
+                "No leído"
+            } else {
+                "Leído"
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(backgroundColor)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = alignment,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isArchive) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = foregroundColor)
+                        Icon(imageVector = icon, contentDescription = label, tint = foregroundColor)
+                    } else {
+                        Icon(imageVector = icon, contentDescription = label, tint = foregroundColor)
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = foregroundColor)
+                    }
+                }
+            }
+        },
+        content = { Box(modifier = Modifier.fillMaxWidth()) { content() } },
+    )
+}
+
+@Composable
 private fun ReadLaterHero(
     item: ReadingItem,
     onClick: () -> Unit,
@@ -1271,17 +1395,25 @@ private fun ReadingListGroup(
     items: List<ReadingItem>,
     onItemClick: (ReadingItem) -> Unit,
     onMarkRead: (ReadingItem) -> Unit,
+    onArchive: (ReadingItem) -> Unit,
+    onToggleRead: (ReadingItem) -> Unit,
     onRetryCapture: (ReadingItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     GroupedListSurface(modifier = modifier) {
         items.forEachIndexed { index, item ->
-            ReadingListItem(
+            SwipeableReadingItem(
                 item = item,
-                onClick = { onItemClick(item) },
-                onMarkRead = { onMarkRead(item) },
-                onRetryCapture = { onRetryCapture(item) },
-            )
+                onArchive = { onArchive(item) },
+                onToggleRead = { onToggleRead(item) },
+            ) {
+                ReadingListItem(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                    onMarkRead = { onMarkRead(item) },
+                    onRetryCapture = { onRetryCapture(item) },
+                )
+            }
             if (index < items.lastIndex) {
                 GroupDivider()
             }
@@ -1655,6 +1787,9 @@ private fun HomeScreenPreview() {
             onAddSource = { _, _, _ -> },
             onDeleteSource = {},
             onMarkRead = {},
+            onSetRead = { _, _ -> },
+            onArchiveItem = {},
+            onRestoreItem = {},
             onRetryCapture = {},
             onClearHistory = {},
             onCreateFolder = {},
