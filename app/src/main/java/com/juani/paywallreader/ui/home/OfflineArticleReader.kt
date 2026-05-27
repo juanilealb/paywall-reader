@@ -285,44 +285,21 @@ private fun FloatingReaderActions(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
-    Row(
+    Column(
         modifier = modifier,
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn() + slideInHorizontally(initialOffsetX = { it / 2 }),
-            exit = slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut(),
+            enter = fadeIn(),
+            exit = fadeOut(),
         ) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = Color(0xFF26231D).copy(alpha = 0.96f),
-                contentColor = Color(0xFFFFF7EA),
-                tonalElevation = 0.dp,
-            ) {
-                Column(
-                    modifier = Modifier.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    FilledTonalButton(onClick = onArchiveAndNext) {
-                        Icon(Icons.Rounded.Archive, contentDescription = null)
-                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                        Text("Archivar + sig.")
-                    }
-                    FilledTonalButton(onClick = onMoveToFolderAndNext) {
-                        Icon(Icons.Rounded.Folder, contentDescription = null)
-                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                        Text("Carpeta + sig.")
-                    }
-                    FilledTonalButton(onClick = onExitToMenu) {
-                        Icon(Icons.Rounded.Close, contentDescription = null)
-                        Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                        Text("Salir")
-                    }
-                }
-            }
+            ReadingActionToolbar(
+                onArchiveAndNext = onArchiveAndNext,
+                onMoveToFolderAndNext = onMoveToFolderAndNext,
+                onExitToMenu = onExitToMenu,
+            )
         }
         Surface(
             shape = CircleShape,
@@ -334,6 +311,42 @@ private fun FloatingReaderActions(
                     imageVector = if (expanded) Icons.Rounded.Close else Icons.Rounded.MoreVert,
                     contentDescription = if (expanded) "Ocultar acciones" else "Mostrar acciones",
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadingActionToolbar(
+    onArchiveAndNext: () -> Unit,
+    onMoveToFolderAndNext: () -> Unit,
+    onExitToMenu: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = Color(0xFF26231D).copy(alpha = 0.96f),
+        contentColor = Color(0xFFFFF7EA),
+        tonalElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            TextButton(onClick = onArchiveAndNext) {
+                Icon(Icons.Rounded.Archive, contentDescription = null)
+                Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                Text("Archivar + sig.")
+            }
+            TextButton(onClick = onMoveToFolderAndNext) {
+                Icon(Icons.Rounded.Folder, contentDescription = null)
+                Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                Text("Carpeta + sig.")
+            }
+            TextButton(onClick = onExitToMenu) {
+                Icon(Icons.Rounded.Close, contentDescription = null)
+                Spacer(modifier = Modifier.widthIn(min = 8.dp))
+                Text("Salir")
             }
         }
     }

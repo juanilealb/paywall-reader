@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.juani.paywallreader.data.capture.CaptureWorkManager
 import com.juani.paywallreader.data.local.AppDatabase
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ORIGINAL
 import com.juani.paywallreader.data.repository.SourceRepository
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
 import com.juani.paywallreader.domain.model.HistoryItem
@@ -80,6 +81,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         text: String? = null,
         markdown: String? = null,
         imageUrl: String? = null,
+        captureProvider: String? = null,
     ) {
         viewModelScope.launch {
             repository.saveForLater(
@@ -93,6 +95,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 text = text,
                 markdown = markdown,
                 imageUrl = imageUrl,
+                captureProvider = captureProvider ?: CAPTURE_PROVIDER_ORIGINAL,
             )
         }
     }
