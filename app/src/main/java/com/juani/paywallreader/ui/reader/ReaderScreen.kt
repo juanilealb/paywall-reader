@@ -85,6 +85,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
+import com.juani.paywallreader.data.capture.ArticleCaptureScripts
+import com.juani.paywallreader.data.capture.DEFUDDLE_ASSET_PATH
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
@@ -386,7 +388,7 @@ fun ReaderScreen(
             )
             onCaptured()
         } else {
-            view.evaluateJavascript(ARTICLE_CAPTURE_SCRIPT) { rawPayload ->
+            view.evaluateArticleCaptureScript { rawPayload ->
                 val payload = rawPayload.decodeArticleCapturePayload()
                 val capturedTitle = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: title
                 val capturedText = payload?.optString("text")?.takeIf { it.isNotBlank() }
@@ -399,7 +401,8 @@ fun ReaderScreen(
                     payload?.optString("excerpt")?.takeIf { it.isNotBlank() },
                     payload?.optString("html")?.takeIf { it.isNotBlank() },
                     capturedText,
-                    capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
+                    payload?.optString("markdown")?.takeIf { it.isNotBlank() }
+                        ?: capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
                     payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
                 )
                 onCaptured()
@@ -978,24 +981,6 @@ private fun ReaderToolbarActions(
     }
 }
 
-private val ARTICLE_CAPTURE_SCRIPT = """
-    (function() {
-        var meta = function(name) {
-            var node = document.querySelector('meta[name="' + name + '"], meta[property="' + name + '"]');
-            return node ? (node.getAttribute('content') || '') : '';
-        };
-        var article = document.querySelector('article') || document.body;
-        return JSON.stringify({
-            title: meta('og:title') || document.title || '',
-            author: meta('author') || meta('article:author') || '',
-            excerpt: meta('description') || meta('og:description') || '',
-            imageUrl: meta('og:image') || '',
-            html: article ? article.outerHTML : (document.documentElement ? document.documentElement.outerHTML : ''),
-            text: article ? article.innerText : (document.body ? document.body.innerText : '')
-        });
-    })();
-""".trimIndent()
-
 private val BLOCKED_AD_HOST_PARTS = listOf(
     "doubleclick.net",
     "googlesyndication.com",
@@ -1016,6 +1001,23 @@ private val BLOCKED_AD_PATH_PARTS = listOf(
     "/gampad/",
     "/securepubads.",
 )
+
+private fun WebView.evaluateArticleCaptureScript(onResult: (String?) -> Unit) {
+    val defuddleBundle = context.assets.readTextOrNull(DEFUDDLE_ASSET_PATH).orEmpty()
+    if (defuddleBundle.isBlank()) {
+        evaluateJavascript(ArticleCaptureScripts.CAPTURE_SCRIPT, onResult)
+        return
+    }
+
+    evaluateJavascript(ArticleCaptureScripts.defuddleBootstrap(defuddleBundle)) {
+        evaluateJavascript(ArticleCaptureScripts.CAPTURE_SCRIPT, onResult)
+    }
+}
+
+private fun android.content.res.AssetManager.readTextOrNull(path: String): String? =
+    runCatching {
+        open(path).bufferedReader().use { it.readText() }
+    }.getOrNull()
 
 private fun String?.decodeArticleCapturePayload(): JSONObject? = runCatching {
     val decoded = JSONArray("[${this ?: "null"}]").optString(0)
@@ -1042,7 +1044,7 @@ private fun WebView.captureHeadlessArticle(
     val resolvedUrl = url ?: sourceUrl
     val originalUrl = resolvedUrl.toOriginalArticleUrl()
     val fallbackTitle = title?.takeIf { it.isNotBlank() } ?: originalUrl.toDisplaySourceName()
-    evaluateJavascript(ARTICLE_CAPTURE_SCRIPT) { rawPayload ->
+    evaluateArticleCaptureScript { rawPayload ->
         val payload = rawPayload.decodeArticleCapturePayload()
         val capturedTitle = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: fallbackTitle
         val capturedText = payload?.optString("text")?.takeIf { it.isNotBlank() }
@@ -1055,7 +1057,8 @@ private fun WebView.captureHeadlessArticle(
             payload?.optString("excerpt")?.takeIf { it.isNotBlank() },
             payload?.optString("html")?.takeIf { it.isNotBlank() },
             capturedText,
-            capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
+            payload?.optString("markdown")?.takeIf { it.isNotBlank() }
+                ?: capturedText?.toBasicMarkdown(capturedTitle, originalUrl),
             payload?.optString("imageUrl")?.takeIf { it.isNotBlank() },
         )
         onCaptured()
