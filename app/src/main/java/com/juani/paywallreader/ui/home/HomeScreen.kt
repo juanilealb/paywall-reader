@@ -118,6 +118,7 @@ import com.juani.paywallreader.ui.components.AddSourceSheet
 import com.juani.paywallreader.ui.components.BrowserFavicon
 import com.juani.paywallreader.ui.components.SourceCard
 import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
+import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
 import kotlinx.coroutines.launch
@@ -142,6 +143,7 @@ fun HomeRoute(
     var consumedSharedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
     var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
+    var headlessCaptureUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var showReaderMoveBookmarkDialog by rememberSaveable { mutableStateOf(false) }
     var readerMoveBookmarkNewFolder by rememberSaveable { mutableStateOf("") }
     val readerFolders = remember(uiState.folders, uiState.readingItems) {
@@ -173,8 +175,9 @@ fun HomeRoute(
         if (url != null && url != consumedSharedUrl) {
             consumedSharedUrl = url
             viewModel.markSharedUrlPending(url)
+            headlessCaptureUrl = url
             openReadLaterRequest++
-            Toast.makeText(context, "Agregado a la cola de captura", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Capturando en segundo plano", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -291,6 +294,31 @@ fun HomeRoute(
             showReaderMoveBookmarkDialog = false
         }
     }
+    HeadlessArticleCaptureHost(
+        captureUrl = headlessCaptureUrl,
+        onSaveForLater = { title, url, sourceName, resolvedUrl, author, excerpt, html, text, markdown, imageUrl, captureProvider ->
+            viewModel.saveForLater(
+                title = title,
+                url = url,
+                sourceName = sourceName,
+                resolvedUrl = resolvedUrl,
+                author = author,
+                excerpt = excerpt,
+                html = html,
+                text = text,
+                markdown = markdown,
+                imageUrl = imageUrl,
+                captureProvider = captureProvider,
+            )
+        },
+        onCaptureStatusChange = viewModel::updateCaptureStatus,
+        onCaptureComplete = { completedUrl ->
+            if (completedUrl == headlessCaptureUrl || completedUrl.isNotBlank()) {
+                headlessCaptureUrl = null
+            }
+        },
+    )
+
 }
 
 @Composable

@@ -356,7 +356,7 @@ fun ReaderScreen(
     val detectsAuthSurfaces = remember(initialUrl) {
         initialUrl.isBlogAuthHost()
     }
-    var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(false) }
+    var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(true) }
     var readerFocusMode by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl.ifBlank { sourceUrl }.toOriginalArticleUrl())))
@@ -1272,6 +1272,10 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
 
           if (!enabled) {
             root.classList.remove('paywall-reader-focus-mode');
+            if (document.body && document.body.dataset.paywallReaderOriginalHtml) {
+              document.body.innerHTML = document.body.dataset.paywallReaderOriginalHtml;
+              delete document.body.dataset.paywallReaderOriginalHtml;
+            }
             return 'off';
           }
 
@@ -1282,6 +1286,21 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
             document.body;
           if (target) {
             target.classList.add('paywall-reader-focus-target');
+            if (document.body && !document.body.dataset.paywallReaderOriginalHtml) {
+              var title = document.querySelector('h1') || document.querySelector('meta[property="og:title"]');
+              var reader = document.createElement('main');
+              reader.className = 'paywall-reader-focus-target';
+              var titleText = title ? (title.innerText || title.textContent || title.getAttribute('content') || '') : document.title;
+              if (titleText) {
+                var h1 = document.createElement('h1');
+                h1.textContent = titleText;
+                reader.appendChild(h1);
+              }
+              reader.appendChild(target.cloneNode(true));
+              document.body.dataset.paywallReaderOriginalHtml = document.body.innerHTML;
+              document.body.innerHTML = '';
+              document.body.appendChild(reader);
+            }
           }
           root.classList.add('paywall-reader-focus-mode');
           document.documentElement.classList.remove('modal-open', 'no-scroll', 'noscroll', 'scroll-lock');
