@@ -4,12 +4,32 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.juani.paywallreader.data.local.AppDatabase
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ORIGINAL
 import com.juani.paywallreader.data.repository.SourceRepository
+import com.juani.paywallreader.domain.model.ReadingItem
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SourceRepository(
         AppDatabase.getInstance(application).sourceDao(),
+    )
+
+    val uiState: StateFlow<ReaderUiState> = combine(
+        repository.readingFolders,
+        repository.readingItems,
+    ) { folders, readingItems ->
+        ReaderUiState(
+            readingFolders = folders,
+            readingItems = readingItems,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ReaderUiState(),
     )
 
     fun saveForLater(
@@ -37,14 +57,32 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 text = text,
                 markdown = markdown,
                 imageUrl = imageUrl,
-                captureProvider = captureProvider.orEmpty(),
+                captureProvider = captureProvider ?: CAPTURE_PROVIDER_ORIGINAL,
             )
+        }
+    }
+
+    fun moveBookmarkToFolder(url: String, folderName: String) {
+        viewModelScope.launch {
+            repository.moveBookmarkToFolder(url, folderName)
+        }
+    }
+
+    fun createReadingFolder(folderName: String) {
+        viewModelScope.launch {
+            repository.createReadingFolder(folderName)
         }
     }
 
     fun markRead(url: String) {
         viewModelScope.launch {
             repository.markRead(url)
+        }
+    }
+
+    fun archiveBookmark(url: String) {
+        viewModelScope.launch {
+            repository.archiveBookmark(url)
         }
     }
 
@@ -60,3 +98,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 }
+
+data class ReaderUiState(
+    val readingFolders: List<String> = emptyList(),
+    val readingItems: List<ReadingItem> = emptyList(),
+)

@@ -153,9 +153,9 @@ fun HomeRoute(
     var headlessCaptureUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var showReaderMoveBookmarkDialog by rememberSaveable { mutableStateOf(false) }
     var readerMoveBookmarkNewFolder by rememberSaveable { mutableStateOf("") }
-    val readerFolders = remember(uiState.folders, uiState.readingItems) {
+    val readerFolders = remember(uiState.readingFolders, uiState.readingItems) {
         val hasUnfiledItems = uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
-        (listOf(UNFILED_FOLDER_NAME) + uiState.folders + uiState.readingItems.map { it.folderName })
+        (listOf(UNFILED_FOLDER_NAME) + uiState.readingFolders + uiState.readingItems.map { it.folderName })
             .distinct()
             .filter { it.isNotBlank() }
             .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
@@ -236,8 +236,10 @@ fun HomeRoute(
             Toast.makeText(context, "Reintento agregado a la cola", Toast.LENGTH_SHORT).show()
         },
         onClearHistory = viewModel::clearHistory,
-        onCreateFolder = viewModel::createFolder,
-        onDeleteFolder = viewModel::deleteFolder,
+        onCreateSourceFolder = viewModel::createSourceFolder,
+        onCreateReadingFolder = viewModel::createReadingFolder,
+        onDeleteSourceFolder = viewModel::deleteSourceFolder,
+        onDeleteReadingFolder = viewModel::deleteReadingFolder,
         onUpdateSource = viewModel::updateSource,
         existingUrls = uiState.sources.map { it.url }.toSet(),
         addSourceRequest = addSourceRequest,
@@ -352,8 +354,10 @@ fun HomeScreen(
     onMoveBookmarkToFolder: (ReadingItem, String) -> Unit,
     onRetryCapture: (ReadingItem) -> Unit,
     onClearHistory: () -> Unit,
-    onCreateFolder: (String) -> Unit,
-    onDeleteFolder: (String) -> Unit,
+    onCreateSourceFolder: (String) -> Unit,
+    onCreateReadingFolder: (String) -> Unit,
+    onDeleteSourceFolder: (String) -> Unit,
+    onDeleteReadingFolder: (String) -> Unit,
     onUpdateSource: (Source, String, String, String) -> Unit,
     existingUrls: Set<String>,
     addSourceRequest: Int = 0,
@@ -408,17 +412,16 @@ fun HomeScreen(
         )
     }
 
-    val folders = remember(uiState.folders, uiState.sources, uiState.readingItems) {
-        val hasUnfiledItems = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME } ||
-            uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
-        (uiState.folders + uiState.sources.map { it.folderName } + uiState.readingItems.map { it.folderName })
+    val folders = remember(uiState.sourceFolders, uiState.sources) {
+        val hasUnfiledItems = uiState.sources.any { it.folderName == UNFILED_FOLDER_NAME }
+        (uiState.sourceFolders + uiState.sources.map { it.folderName })
             .distinct()
             .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
             .sortedBy { it.lowercase() }
     }
-    val readingFolders = remember(uiState.folders, uiState.readingItems) {
+    val readingFolders = remember(uiState.readingFolders, uiState.readingItems) {
         val hasUnfiledItems = uiState.readingItems.any { it.folderName == UNFILED_FOLDER_NAME }
-        (uiState.folders + uiState.readingItems.map { it.folderName })
+        (uiState.readingFolders + uiState.readingItems.map { it.folderName })
             .distinct()
             .filterNot { it == UNFILED_FOLDER_NAME && !hasUnfiledItems }
             .sortedBy { it.lowercase() }
@@ -479,6 +482,18 @@ fun HomeScreen(
             selectedSection = HomeSection.ReadLater
             selectedFolder = null
             searchQuery = ""
+        }
+    }
+
+    LaunchedEffect(selectedSection, selectedFolder, folders, readingFolders) {
+        val selected = selectedFolder ?: return@LaunchedEffect
+        val availableFolders = when (selectedSection) {
+            HomeSection.Sources -> folders
+            HomeSection.ReadLater -> readingFolders
+            HomeSection.History -> emptyList()
+        }
+        if (selected !in availableFolders && selected != UNFILED_FOLDER_NAME) {
+            selectedFolder = null
         }
     }
 
@@ -827,7 +842,11 @@ fun HomeScreen(
                     enabled = newFolderName.isNotBlank(),
                     onClick = {
                         val folder = newFolderName.trim()
-                        onCreateFolder(folder)
+                        when (selectedSection) {
+                            HomeSection.Sources -> onCreateSourceFolder(folder)
+                            HomeSection.ReadLater -> onCreateReadingFolder(folder)
+                            HomeSection.History -> Unit
+                        }
                         selectedFolder = folder
                         showNewFolderDialog = false
                     },
@@ -855,7 +874,11 @@ fun HomeScreen(
                         onClick = {
                             showDeleteFolderConfirmation = false
                             selectedFolder = null
-                            onDeleteFolder(folder)
+                            when (selectedSection) {
+                                HomeSection.Sources -> onDeleteSourceFolder(folder)
+                                HomeSection.ReadLater -> onDeleteReadingFolder(folder)
+                                HomeSection.History -> Unit
+                            }
                         },
                     ) {
                         Text(stringResource(R.string.delete))
@@ -1951,8 +1974,10 @@ private fun HomeScreenPreview() {
             onMoveBookmarkToFolder = { _, _ -> },
             onRetryCapture = {},
             onClearHistory = {},
-            onCreateFolder = {},
-            onDeleteFolder = {},
+            onCreateSourceFolder = {},
+            onCreateReadingFolder = {},
+            onDeleteSourceFolder = {},
+            onDeleteReadingFolder = {},
             onUpdateSource = { _, _, _, _ -> },
             existingUrls = emptySet(),
         )
