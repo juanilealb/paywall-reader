@@ -3,12 +3,16 @@ package com.juani.paywallreader.ui.home
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,11 +75,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -89,8 +91,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
@@ -104,6 +108,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -124,6 +129,8 @@ import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
 import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private val HomeBottomActionSize = 64.dp
@@ -1325,7 +1332,6 @@ private fun SectionHeader(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 private fun SwipeableReadingItem(
     item: ReadingItem,
     onArchive: () -> Unit,
@@ -1333,41 +1339,81 @@ private fun SwipeableReadingItem(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> onToggleRead()
-                SwipeToDismissBoxValue.EndToStart -> onArchive()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val swipeOffset = remember(item.url) { Animatable(0f) }
+    val actionThresholdPx = with(density) { 88.dp.toPx() }
+    val maxRevealPx = with(density) { 144.dp.toPx() }
+    val settleSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMediumLow,
     )
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier.fillMaxWidth(),
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            val target = dismissState.targetValue
-            val isArchive = target == SwipeToDismissBoxValue.EndToStart
-            val icon = if (isArchive) Icons.Rounded.Archive else Icons.Rounded.Check
-            val label = if (isArchive) {
-                "Archivar"
-            } else if (item.isRead) {
-                "No leído"
-            } else {
-                "Leído"
-            }
-            StickySwipeActionBackground(
-                progress = if (target == SwipeToDismissBoxValue.Settled) 0f else dismissState.progress,
-                isArchive = isArchive,
-                icon = icon,
-                label = label,
-            )
-        },
-        content = { Box(modifier = Modifier.fillMaxWidth()) { content() } },
-    )
+    val offsetValue = swipeOffset.value
+    val isArchive = offsetValue < 0f
+    val icon = if (isArchive) Icons.Rounded.Archive else Icons.Rounded.Check
+    val label = if (isArchive) {
+        "Archivar"
+    } else if (item.isRead) {
+        "No leído"
+    } else {
+        "Leído"
+    }
+    val progress = (abs(offsetValue) / actionThresholdPx).coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraLarge),
+    ) {
+        StickySwipeActionBackground(
+            progress = progress,
+            isArchive = isArchive,
+            icon = icon,
+            label = label,
+            modifier = Modifier.matchParentSize(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetValue.roundToInt(), 0) }
+                .pointerInput(item.url, item.isRead) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            coroutineScope.launch { swipeOffset.stop() }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            coroutineScope.launch {
+                                swipeOffset.snapTo(
+                                    (swipeOffset.value + dragAmount).coerceIn(-maxRevealPx, maxRevealPx),
+                                )
+                            }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch { swipeOffset.animateTo(0f, settleSpec) }
+                        },
+                        onDragEnd = {
+                            val finalOffset = swipeOffset.value
+                            val committed = abs(finalOffset) >= actionThresholdPx
+                            coroutineScope.launch {
+                                if (committed) {
+                                    val committedOffset = if (finalOffset < 0f) -maxRevealPx else maxRevealPx
+                                    swipeOffset.animateTo(committedOffset, settleSpec)
+                                    if (finalOffset < 0f) {
+                                        onArchive()
+                                    } else {
+                                        onToggleRead()
+                                    }
+                                }
+                                swipeOffset.animateTo(0f, settleSpec)
+                            }
+                        },
+                    )
+                },
+        ) {
+            content()
+        }
+    }
 }
 
 @Composable
