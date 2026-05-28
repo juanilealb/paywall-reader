@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SourceEntity::class, ReadingItemEntity::class, HistoryEntity::class, FolderEntity::class],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,6 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .addCallback(DefaultSourcesCallback())
                 .build()
@@ -167,14 +168,47 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE reading_items ADD COLUMN captureProvider TEXT NOT NULL DEFAULT 'original'")
             }
         }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE folders RENAME TO folders_legacy")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS folders (
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        PRIMARY KEY(name, type)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO folders(name, type, createdAt)
+                    SELECT name, 'source', createdAt
+                    FROM folders_legacy
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO folders(name, type, createdAt)
+                    SELECT folderName, 'reading', MIN(addedAt)
+                    FROM reading_items
+                    WHERE isArchived = 0
+                    GROUP BY folderName
+                    """.trimIndent(),
+                )
+                db.execSQL("DROP TABLE folders_legacy")
+            }
+        }
     }
 }
 
 private class DefaultSourcesCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
-        db.insert("folders", 0, "News".toContentValues(createdAt = 1))
-        db.insert("folders", 0, BLOGS_FOLDER.toContentValues(createdAt = 2))
+        db.insert("folders", 0, "News".toContentValues(type = FOLDER_TYPE_SOURCE, createdAt = 1))
+        db.insert("folders", 0, BLOGS_FOLDER.toContentValues(type = FOLDER_TYPE_SOURCE, createdAt = 2))
         DEFAULT_SOURCES.forEach { source ->
             db.insert("sources", 0, source.toContentValues())
         }
@@ -248,8 +282,9 @@ private fun SourceEntity.toContentValues(): ContentValues =
         put("createdAt", createdAt)
     }
 
-private fun String.toContentValues(createdAt: Long): ContentValues =
+private fun String.toContentValues(type: String = FOLDER_TYPE_SOURCE, createdAt: Long): ContentValues =
     ContentValues().apply {
         put("name", this@toContentValues)
+        put("type", type)
         put("createdAt", createdAt)
     }

@@ -7,6 +7,7 @@ import com.juani.paywallreader.data.local.ReadingItemEntity
 import com.juani.paywallreader.data.local.SourceEntity
 import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_PERISCOPE
 import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_UNWALL
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_X
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
@@ -237,6 +238,39 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `saveForLater preserves X capture provider`() = runTest {
+        repository.saveForLater(
+            title = "Captured X Post",
+            url = "https://x.com/example/status/123",
+            sourceName = "X",
+            captureProvider = CAPTURE_PROVIDER_X,
+        )
+
+        assertEquals(CAPTURE_PROVIDER_X, sourceDao.readingItems.value.single().captureProvider)
+    }
+
+    @Test
+    fun `saveForLater preserves archived state when background capture completes`() = runTest {
+        repository.saveBookmarkFromExternalShare("https://example.com/article")
+        repository.updateCaptureStatus("https://example.com/article", CAPTURE_STATUS_CAPTURING)
+        repository.archiveBookmark("https://example.com/article")
+        val archivedAt = sourceDao.readingItems.value.single().archivedAt
+
+        repository.saveForLater(
+            title = "Captured Article",
+            url = "https://example.com/article",
+            sourceName = "Example",
+            text = "Captured body",
+        )
+
+        val item = sourceDao.readingItems.value.single()
+        assertTrue(item.isArchived)
+        assertEquals(archivedAt, item.archivedAt)
+        assertEquals(CAPTURE_STATUS_READY, item.captureStatus)
+        assertEquals("Captured body", item.text)
+    }
+
+    @Test
     fun `saveForLater falls back to original for unknown capture providers`() = runTest {
         repository.saveForLater(
             title = "Captured Article",
@@ -295,24 +329,25 @@ class SourceRepositoryTest {
     }
 
     @Test
-    fun `moveBookmarkToFolder updates bookmark folder and exposes it in folders`() = runTest {
+    fun `moveBookmarkToFolder updates bookmark folder and exposes it in reading folders`() = runTest {
         repository.saveBookmarkFromExternalShare("https://example.com/article")
 
         repository.moveBookmarkToFolder(" https://example.com/article ", " Long Reads ")
 
         val item = sourceDao.readingItems.value.single()
         assertEquals("Long Reads", item.folderName)
-        assertEquals(listOf("Long Reads"), repository.folders.first())
+        assertEquals(listOf("Long Reads"), repository.readingFolders.first())
+        assertEquals(emptyList<String>(), repository.sourceFolders.first())
     }
 
     @Test
-    fun `deleteFolder moves matching bookmarks to unfiled`() = runTest {
+    fun `deleteReadingFolder moves matching bookmarks to unfiled`() = runTest {
         repository.saveBookmarkFromExternalShare("https://example.com/article", folderName = "Long Reads")
 
-        repository.deleteFolder("Long Reads")
+        repository.deleteReadingFolder("Long Reads")
 
         assertEquals(UNFILED_FOLDER_NAME, sourceDao.readingItems.value.single().folderName)
-        assertEquals(listOf(UNFILED_FOLDER_NAME), repository.folders.first())
+        assertEquals(listOf(UNFILED_FOLDER_NAME), repository.readingFolders.first())
     }
 
     @Test
@@ -380,7 +415,8 @@ private class FakeSourceDao : SourceDao {
 
     override fun getAll(): Flow<List<SourceEntity>> = entities
 
-    override fun getFolders(): Flow<List<FolderEntity>> = folders
+    override fun getFolders(type: String): Flow<List<FolderEntity>> =
+        folders.map { folderList -> folderList.filter { it.type == type } }
 
     override fun getReadingItems(): Flow<List<ReadingItemEntity>> =
         readingItems.map { items -> items.filterNot { it.isArchived }.sortedByDescending { it.addedAt } }
@@ -415,7 +451,7 @@ private class FakeSourceDao : SourceDao {
     }
 
     override suspend fun insertFolder(folder: FolderEntity): Long {
-        if (folders.value.any { it.name == folder.name }) {
+        if (folders.value.any { it.name == folder.name && it.type == folder.type }) {
             return -1
         }
         folders.value = folders.value + folder.copy(createdAt = folders.value.size + 1L)
@@ -460,8 +496,8 @@ private class FakeSourceDao : SourceDao {
         entities.value = entities.value.filterNot { it.id == source.id }
     }
 
-    override suspend fun deleteFolder(folderName: String) {
-        folders.value = folders.value.filterNot { it.name == folderName }
+    override suspend fun deleteFolder(folderName: String, type: String) {
+        folders.value = folders.value.filterNot { it.name == folderName && it.type == type }
     }
 
     override suspend fun countByUrl(url: String): Int =

@@ -16,21 +16,35 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -41,11 +55,13 @@ import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,11 +75,14 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalFloatingToolbar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,9 +93,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -93,6 +115,10 @@ import com.juani.paywallreader.data.capture.DEFUDDLE_ASSET_PATH
 import com.juani.paywallreader.data.capture.XPostExtractor
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
+import com.juani.paywallreader.domain.model.CAPTURE_STATUS_READY
+import com.juani.paywallreader.domain.model.ReadingItem
+import com.juani.paywallreader.domain.model.UNFILED_FOLDER_NAME
+import com.juani.paywallreader.ui.home.OfflineArticleReaderScreen
 import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
 import com.juani.paywallreader.data.reader.ARCHIVE_FO_HOST
 import com.juani.paywallreader.data.reader.UNWALL_HOST
@@ -317,6 +343,7 @@ fun ReaderRoute(
     modifier: Modifier = Modifier,
     viewModel: ReaderViewModel = readerViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     ReaderScreen(
         sourceName = sourceName,
         sourceUrl = sourceUrl,
@@ -327,6 +354,11 @@ fun ReaderRoute(
         onSaveForLater = viewModel::saveForLater,
         onCaptureStatusChange = viewModel::updateCaptureStatus,
         onMarkRead = viewModel::markRead,
+        onArchiveBookmark = viewModel::archiveBookmark,
+        onMoveBookmarkToFolder = viewModel::moveBookmarkToFolder,
+        onCreateReadingFolder = viewModel::createReadingFolder,
+        readingFolders = uiState.readingFolders,
+        savedReadingItems = uiState.readingItems,
         onRecordVisit = viewModel::recordVisit,
         modifier = modifier,
     )
@@ -364,6 +396,11 @@ fun ReaderScreen(
     ) -> Unit,
     onCaptureStatusChange: (url: String, status: String) -> Unit = { _, _ -> },
     onMarkRead: (url: String) -> Unit,
+    onArchiveBookmark: (url: String) -> Unit = {},
+    onMoveBookmarkToFolder: (url: String, folderName: String) -> Unit = { _, _ -> },
+    onCreateReadingFolder: (folderName: String) -> Unit = {},
+    readingFolders: List<String> = emptyList(),
+    savedReadingItems: List<ReadingItem> = emptyList(),
     onRecordVisit: (title: String, url: String, sourceName: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -379,6 +416,7 @@ fun ReaderScreen(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.statusBars())
             onDispose {
+                insetsController.show(WindowInsetsCompat.Type.statusBars())
                 insetsController.isAppearanceLightStatusBars = !darkTheme
             }
         } else {
@@ -395,6 +433,10 @@ fun ReaderScreen(
     var isAuthSurface by remember { mutableStateOf(false) }
     var currentUrl by remember(sourceUrl) { mutableStateOf(sourceUrl.trim().toPreferredReaderUrl()) }
     var currentTitle by remember(sourceUrl) { mutableStateOf(sourceName) }
+    var savedArticleOverlayItem by remember { mutableStateOf<ReadingItem?>(null) }
+    var offlineArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
+    var showSavedArticleFolderDialog by rememberSaveable { mutableStateOf(false) }
+    var savedArticleNewFolderName by rememberSaveable { mutableStateOf("") }
     var autoCaptureCompleted by rememberSaveable(sourceUrl, autoCaptureUrl) { mutableStateOf(false) }
     var autoCaptureCallbackFinished by rememberSaveable(sourceUrl, autoCaptureUrl) { mutableStateOf(false) }
     val initialUrl = remember(sourceUrl) {
@@ -428,6 +470,52 @@ fun ReaderScreen(
         webView?.loadUrl(originalUrl.toArchiveSearchUrl())
         Unit
     }
+    fun saveArticleAndShowOverlay(
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String?,
+        author: String?,
+        excerpt: String?,
+        html: String?,
+        text: String?,
+        markdown: String?,
+        imageUrl: String?,
+        captureProvider: String?,
+    ) {
+        onSaveForLater(
+            title,
+            url,
+            sourceName,
+            resolvedUrl,
+            author,
+            excerpt,
+            html,
+            text,
+            markdown,
+            imageUrl,
+            captureProvider,
+        )
+        val existing = savedReadingItems.firstOrNull { it.url == url }
+        savedArticleOverlayItem = existing ?: ReadingItem(
+            id = 0,
+            title = title.ifBlank { url.toDisplaySourceName() },
+            url = url,
+            sourceName = sourceName.ifBlank { url.toDisplaySourceName() },
+            addedAt = System.currentTimeMillis(),
+            resolvedUrl = resolvedUrl,
+            author = author,
+            excerpt = excerpt,
+            html = html,
+            text = text,
+            markdown = markdown,
+            imageUrl = imageUrl,
+            folderName = UNFILED_FOLDER_NAME,
+            captureStatus = CAPTURE_STATUS_READY,
+            captureProvider = captureProvider.orEmpty().ifBlank { "original" },
+        )
+    }
+
     fun captureCurrentForLater(onCaptured: () -> Unit = {}) {
         val view = webView
         val resolvedUrl = view?.url ?: currentUrl.ifBlank { sourceUrl }
@@ -435,7 +523,7 @@ fun ReaderScreen(
         val captureProvider = resolvedUrl.captureProviderKey()
         val title = currentTitle.ifBlank { sourceName }
         if (view == null) {
-            onSaveForLater(
+            saveArticleAndShowOverlay(
                 title,
                 originalUrl,
                 sourceName,
@@ -454,7 +542,7 @@ fun ReaderScreen(
                 val payload = rawPayload.decodeArticleCapturePayload()
                 val capturedTitle = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: title
                 val capturedText = payload?.optString("text")?.takeIf { it.isNotBlank() }
-                onSaveForLater(
+                saveArticleAndShowOverlay(
                     capturedTitle,
                     originalUrl,
                     sourceName,
@@ -806,8 +894,259 @@ fun ReaderScreen(
                         ),
                 )
             }
+
+            SavedArticleConfirmationOverlay(
+                item = savedArticleOverlayItem,
+                onDismiss = { savedArticleOverlayItem = null },
+                onReadNow = { item ->
+                    val latest = savedReadingItems.firstOrNull { it.url == item.url } ?: item
+                    savedArticleOverlayItem = null
+                    offlineArticleToRead = latest
+                },
+                onMoveToFolder = {
+                    savedArticleNewFolderName = ""
+                    showSavedArticleFolderDialog = true
+                },
+                modifier = Modifier.zIndex(3f),
+            )
+        }
+
+        offlineArticleToRead?.let { item ->
+            OfflineArticleReaderScreen(
+                item = savedReadingItems.firstOrNull { it.url == item.url } ?: item,
+                onBack = { offlineArticleToRead = null },
+                onOpenWeb = { offlineArticleToRead = null },
+                onMarkRead = { onMarkRead(item.url) },
+                onArchiveAndNext = {
+                    onArchiveBookmark(item.url)
+                    offlineArticleToRead = null
+                },
+                onMoveToFolderAndNext = {
+                    savedArticleOverlayItem = item
+                    savedArticleNewFolderName = ""
+                    showSavedArticleFolderDialog = true
+                },
+                onExitToMenu = { offlineArticleToRead = null },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(4f),
+            )
+        }
+
+        if (showSavedArticleFolderDialog) {
+            savedArticleOverlayItem?.let { item ->
+                ReaderSaveFolderDialog(
+                    item = item,
+                    folders = readingFolders,
+                    newFolderName = savedArticleNewFolderName,
+                    onNewFolderNameChange = { savedArticleNewFolderName = it },
+                    onMove = { folderName ->
+                        onCreateReadingFolder(folderName)
+                        onMoveBookmarkToFolder(item.url, folderName)
+                        savedArticleOverlayItem = item.copy(folderName = folderName)
+                        offlineArticleToRead = offlineArticleToRead?.let { current ->
+                            if (current.url == item.url) current.copy(folderName = folderName) else current
+                        }
+                        showSavedArticleFolderDialog = false
+                        savedArticleNewFolderName = ""
+                    },
+                    onDismiss = { showSavedArticleFolderDialog = false },
+                )
+            } ?: run {
+                showSavedArticleFolderDialog = false
+            }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SavedArticleConfirmationOverlay(
+    item: ReadingItem?,
+    onDismiss: () -> Unit,
+    onReadNow: (ReadingItem) -> Unit,
+    onMoveToFolder: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    AnimatedVisibility(
+        visible = item != null,
+        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 }),
+        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 3 }),
+        modifier = modifier.fillMaxSize(),
+    ) {
+        val savedItem = item ?: return@AnimatedVisibility
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.32f))
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onDismiss,
+                )
+                .padding(horizontal = 18.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .heightIn(max = maxHeight * 0.55f)
+                    .navigationBarsPadding()
+                    .padding(bottom = 14.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    ),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+                color = Color(0xFF101820),
+                contentColor = Color.White,
+                tonalElevation = 8.dp,
+                shadowElevation = 12.dp,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xFF121B24), Color(0xFF0D151D)),
+                            ),
+                        )
+                        .padding(horizontal = 26.dp, vertical = 26.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cancel))
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Bookmark,
+                            contentDescription = null,
+                            modifier = Modifier.padding(22.dp).size(44.dp),
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.saved_to_reader),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = savedItem.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.72f),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Button(
+                        onClick = { onReadNow(savedItem) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.read_now))
+                    }
+                    Text(
+                        text = stringResource(R.string.tap_anywhere_to_dismiss),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.55f),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SaveOverlayCircleAction(
+                            icon = Icons.Rounded.Folder,
+                            label = stringResource(R.string.folder_name),
+                            onClick = onMoveToFolder,
+                        )
+                        Text(
+                            text = savedItem.folderName.ifBlank { UNFILED_FOLDER_NAME },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.64f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SaveOverlayCircleAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = Color.White.copy(alpha = 0.10f),
+        contentColor = Color.White,
+        modifier = Modifier.size(64.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReaderSaveFolderDialog(
+    item: ReadingItem,
+    folders: List<String>,
+    newFolderName: String,
+    onNewFolderNameChange: (String) -> Unit,
+    onMove: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val candidateFolders = (listOf(UNFILED_FOLDER_NAME) + folders + item.folderName)
+        .distinct()
+        .filter { it.isNotBlank() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.choose_folder)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                candidateFolders.take(6).forEach { folder ->
+                    OutlinedButton(
+                        onClick = { onMove(folder) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (folder == item.folderName) "✓ $folder" else folder)
+                    }
+                }
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = onNewFolderNameChange,
+                    label = { Text(stringResource(R.string.folder_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = newFolderName.isNotBlank(),
+                onClick = { onMove(newFolderName.trim()) },
+            ) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

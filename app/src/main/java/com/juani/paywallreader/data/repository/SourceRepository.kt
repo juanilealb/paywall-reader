@@ -1,6 +1,8 @@
 package com.juani.paywallreader.data.repository
 
 import com.juani.paywallreader.data.local.SourceDao
+import com.juani.paywallreader.data.local.FOLDER_TYPE_READING
+import com.juani.paywallreader.data.local.FOLDER_TYPE_SOURCE
 import com.juani.paywallreader.data.local.FolderEntity
 import com.juani.paywallreader.data.local.HistoryEntity
 import com.juani.paywallreader.data.local.ReadingItemEntity
@@ -11,6 +13,7 @@ import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_ORIGINAL
 import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_PERISCOPE
 import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_REMOVE_PAYWALLS
 import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_UNWALL
+import com.juani.paywallreader.data.reader.CAPTURE_PROVIDER_X
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_PENDING
@@ -32,19 +35,31 @@ class SourceRepository(
         entities.map { it.toDomain() }
     }
 
-    val folders: Flow<List<String>> = combine(
-        sourceDao.getFolders(),
+    val sourceFolders: Flow<List<String>> = combine(
+        sourceDao.getFolders(FOLDER_TYPE_SOURCE),
+        sourceDao.getAll(),
+    ) { entities, sources ->
+        (entities.map { it.name.normalizedFolderName() } + sources.map { it.folderName.normalizedFolderName() })
+            .distinct()
+            .filterNot {
+                it == UNFILED_FOLDER_NAME && sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0
+            }
+            .sortedBy { it.lowercase() }
+    }
+
+    val readingFolders: Flow<List<String>> = combine(
+        sourceDao.getFolders(FOLDER_TYPE_READING),
         sourceDao.getReadingItemFolders(),
     ) { entities, readingItemFolders ->
         (entities.map { it.name.normalizedFolderName() } + readingItemFolders.map { it.normalizedFolderName() })
             .distinct()
             .filterNot {
-                it == UNFILED_FOLDER_NAME &&
-                    sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 &&
-                    sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0
+                it == UNFILED_FOLDER_NAME && sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0
             }
             .sortedBy { it.lowercase() }
     }
+
+    val folders: Flow<List<String>> = sourceFolders
 
     val readingItems: Flow<List<ReadingItem>> = sourceDao.getReadingItems().map { entities ->
         entities.map { it.toDomain() }
@@ -61,7 +76,7 @@ class SourceRepository(
         }
 
         val normalizedFolderName = folderName.normalizedFolderName()
-        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_SOURCE))
         sourceDao.insert(
             SourceEntity(
                 name = name.trim(),
@@ -72,28 +87,47 @@ class SourceRepository(
         )
     }
 
-    suspend fun createFolder(folderName: String) {
+    suspend fun createFolder(folderName: String) = createSourceFolder(folderName)
+
+    suspend fun createSourceFolder(folderName: String) {
         val normalizedFolderName = folderName.normalizedFolderName()
         if (normalizedFolderName != UNFILED_FOLDER_NAME) {
-            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_SOURCE))
         }
     }
 
-    suspend fun deleteFolder(folderName: String) {
+    suspend fun createReadingFolder(folderName: String) {
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName != UNFILED_FOLDER_NAME) {
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_READING))
+        }
+    }
+
+    suspend fun deleteFolder(folderName: String) = deleteSourceFolder(folderName)
+
+    suspend fun deleteSourceFolder(folderName: String) {
         val normalizedFolderName = folderName.normalizedFolderName()
         if (normalizedFolderName == UNFILED_FOLDER_NAME) return
 
-        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME))
+        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME, type = FOLDER_TYPE_SOURCE))
         sourceDao.moveSourcesToFolder(
             folderName = normalizedFolderName,
             targetFolder = UNFILED_FOLDER_NAME,
         )
+        sourceDao.deleteFolder(normalizedFolderName, FOLDER_TYPE_SOURCE)
+    }
+
+    suspend fun deleteReadingFolder(folderName: String) {
+        val normalizedFolderName = folderName.normalizedFolderName()
+        if (normalizedFolderName == UNFILED_FOLDER_NAME) return
+
+        sourceDao.insertFolder(FolderEntity(name = UNFILED_FOLDER_NAME, type = FOLDER_TYPE_READING))
         sourceDao.moveReadingItemsToFolder(
             folderName = normalizedFolderName,
             targetFolder = UNFILED_FOLDER_NAME,
             updatedAt = System.currentTimeMillis(),
         )
-        sourceDao.deleteFolder(normalizedFolderName)
+        sourceDao.deleteFolder(normalizedFolderName, FOLDER_TYPE_READING)
     }
 
     suspend fun updateSource(source: Source, name: String, url: String, folderName: String) {
@@ -103,7 +137,7 @@ class SourceRepository(
         if (normalizedUrl != source.url && sourceDao.countByUrl(normalizedUrl) > 0) return
 
         val normalizedFolderName = folderName.normalizedFolderName()
-        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+        sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_SOURCE))
         sourceDao.updateSource(
             id = source.id,
             name = name.trim(),
@@ -153,8 +187,8 @@ class SourceRepository(
                 folderName = existing?.folderName ?: UNFILED_FOLDER_NAME,
                 isRead = existing?.isRead ?: false,
                 readAt = existing?.readAt,
-                isArchived = false,
-                archivedAt = null,
+                isArchived = existing?.isArchived ?: false,
+                archivedAt = existing?.archivedAt,
                 updatedAt = now,
                 captureStatus = CAPTURE_STATUS_READY,
                 captureProvider = captureProvider.normalizedCaptureProvider(),
@@ -175,7 +209,7 @@ class SourceRepository(
         val now = System.currentTimeMillis()
         val normalizedFolderName = folderName.normalizedFolderName()
         if (normalizedFolderName != UNFILED_FOLDER_NAME) {
-            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_READING))
         }
         val displayTitle = normalizedUrl.toDisplayTitle()
         val existing = sourceDao.getReadingItemByUrl(normalizedUrl)
@@ -240,7 +274,7 @@ class SourceRepository(
 
         val normalizedFolderName = folderName.normalizedFolderName()
         if (normalizedFolderName != UNFILED_FOLDER_NAME) {
-            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName))
+            sourceDao.insertFolder(FolderEntity(name = normalizedFolderName, type = FOLDER_TYPE_READING))
         }
         sourceDao.moveReadingItemToFolder(
             url = validatedUrl.normalizedUrl,
@@ -300,11 +334,11 @@ class SourceRepository(
     }
 
     private suspend fun pruneEmptyUnfiledFolder() {
-        if (
-            sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0 &&
-            sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0
-        ) {
-            sourceDao.deleteFolder(UNFILED_FOLDER_NAME)
+        if (sourceDao.countByFolder(UNFILED_FOLDER_NAME) == 0) {
+            sourceDao.deleteFolder(UNFILED_FOLDER_NAME, FOLDER_TYPE_SOURCE)
+        }
+        if (sourceDao.countReadingItemsByFolder(UNFILED_FOLDER_NAME) == 0) {
+            sourceDao.deleteFolder(UNFILED_FOLDER_NAME, FOLDER_TYPE_READING)
         }
     }
 }
@@ -373,6 +407,7 @@ private fun String.normalizedCaptureProvider(): String = when (trim()) {
     CAPTURE_PROVIDER_UNWALL,
     CAPTURE_PROVIDER_ARCHIVE,
     CAPTURE_PROVIDER_REMOVE_PAYWALLS,
+    CAPTURE_PROVIDER_X,
     CAPTURE_PROVIDER_ORIGINAL -> trim()
     else -> CAPTURE_PROVIDER_ORIGINAL
 }

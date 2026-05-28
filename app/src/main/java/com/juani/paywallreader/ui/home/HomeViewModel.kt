@@ -24,13 +24,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.sources,
-        repository.folders,
+        repository.sourceFolders,
+        repository.readingFolders,
         repository.readingItems,
         repository.historyItems,
-    ) { sources, folders, readingItems, historyItems ->
+    ) { sources, sourceFolders, readingFolders, readingItems, historyItems ->
         HomeUiState(
             sources = sources,
-            folders = folders,
+            folders = sourceFolders,
+            sourceFolders = sourceFolders,
+            readingFolders = readingFolders,
             readingItems = readingItems,
             historyItems = historyItems,
         )
@@ -53,14 +56,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun createFolder(folderName: String) {
+        createSourceFolder(folderName)
+    }
+
+    fun createSourceFolder(folderName: String) {
         viewModelScope.launch {
-            repository.createFolder(folderName)
+            repository.createSourceFolder(folderName)
+        }
+    }
+
+    fun createReadingFolder(folderName: String) {
+        viewModelScope.launch {
+            repository.createReadingFolder(folderName)
         }
     }
 
     fun deleteFolder(folderName: String) {
+        deleteSourceFolder(folderName)
+    }
+
+    fun deleteSourceFolder(folderName: String) {
         viewModelScope.launch {
-            repository.deleteFolder(folderName)
+            repository.deleteSourceFolder(folderName)
+        }
+    }
+
+    fun deleteReadingFolder(folderName: String) {
+        viewModelScope.launch {
+            repository.deleteReadingFolder(folderName)
         }
     }
 
@@ -185,6 +208,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 data class HomeUiState(
     val sources: List<Source> = emptyList(),
     val folders: List<String> = emptyList(),
+    val sourceFolders: List<String> = emptyList(),
+    val readingFolders: List<String> = emptyList(),
     val readingItems: List<ReadingItem> = emptyList(),
     val historyItems: List<HistoryItem> = emptyList(),
 )

@@ -12,8 +12,8 @@ interface SourceDao {
     @Query("SELECT * FROM sources ORDER BY folderName COLLATE NOCASE ASC, name COLLATE NOCASE ASC")
     fun getAll(): Flow<List<SourceEntity>>
 
-    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE ASC")
-    fun getFolders(): Flow<List<FolderEntity>>
+    @Query("SELECT * FROM folders WHERE type = :type ORDER BY name COLLATE NOCASE ASC")
+    fun getFolders(type: String): Flow<List<FolderEntity>>
 
     @Query("SELECT * FROM reading_items WHERE isArchived = 0 ORDER BY addedAt DESC")
     fun getReadingItems(): Flow<List<ReadingItemEntity>>
@@ -45,8 +45,8 @@ interface SourceDao {
     @Delete
     suspend fun delete(source: SourceEntity)
 
-    @Query("DELETE FROM folders WHERE name = :folderName")
-    suspend fun deleteFolder(folderName: String)
+    @Query("DELETE FROM folders WHERE name = :folderName AND type = :type")
+    suspend fun deleteFolder(folderName: String, type: String)
 
     @Query("SELECT COUNT(*) FROM sources WHERE url = :url")
     suspend fun countByUrl(url: String): Int
