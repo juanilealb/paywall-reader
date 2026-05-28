@@ -19,17 +19,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -1348,17 +1351,6 @@ private fun SwipeableReadingItem(
         backgroundContent = {
             val target = dismissState.targetValue
             val isArchive = target == SwipeToDismissBoxValue.EndToStart
-            val backgroundColor = if (isArchive) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.tertiaryContainer
-            }
-            val foregroundColor = if (isArchive) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onTertiaryContainer
-            }
-            val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
             val icon = if (isArchive) Icons.Rounded.Archive else Icons.Rounded.Check
             val label = if (isArchive) {
                 "Archivar"
@@ -1367,29 +1359,117 @@ private fun SwipeableReadingItem(
             } else {
                 "Leído"
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(backgroundColor)
-                    .padding(horizontal = 24.dp),
-                contentAlignment = alignment,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (isArchive) {
-                        Text(label, style = MaterialTheme.typography.labelLarge, color = foregroundColor)
-                        Icon(imageVector = icon, contentDescription = label, tint = foregroundColor)
-                    } else {
-                        Icon(imageVector = icon, contentDescription = label, tint = foregroundColor)
-                        Text(label, style = MaterialTheme.typography.labelLarge, color = foregroundColor)
-                    }
-                }
-            }
+            StickySwipeActionBackground(
+                progress = if (target == SwipeToDismissBoxValue.Settled) 0f else dismissState.progress,
+                isArchive = isArchive,
+                icon = icon,
+                label = label,
+            )
         },
         content = { Box(modifier = Modifier.fillMaxWidth()) { content() } },
     )
+}
+
+@Composable
+private fun StickySwipeActionBackground(
+    progress: Float,
+    isArchive: Boolean,
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val easedProgress = progress.coerceIn(0f, 1f)
+    val backgroundColor = if (isArchive) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val foregroundColor = if (isArchive) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
+    val blobShape = if (isArchive) {
+        RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp, topEnd = 0.dp, bottomEnd = 0.dp)
+    } else {
+        RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 28.dp, bottomEnd = 28.dp)
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(MaterialTheme.shapes.extraLarge)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f)),
+        contentAlignment = alignment,
+    ) {
+        val stickyWidth = (96.dp + (maxWidth - 96.dp) * (0.62f * easedProgress))
+            .coerceAtMost(maxWidth)
+        val labelAlpha = (0.32f + easedProgress).coerceAtMost(1f)
+
+        Surface(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(stickyWidth),
+            shape = blobShape,
+            color = backgroundColor,
+            contentColor = foregroundColor,
+            tonalElevation = 6.dp,
+            shadowElevation = if (easedProgress > 0.48f) 3.dp else 0.dp,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp),
+                contentAlignment = alignment,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isArchive) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = foregroundColor.copy(alpha = labelAlpha),
+                        )
+                        SwipeActionIcon(icon = icon, label = label, foregroundColor = foregroundColor)
+                    } else {
+                        SwipeActionIcon(icon = icon, label = label, foregroundColor = foregroundColor)
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = foregroundColor.copy(alpha = labelAlpha),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeActionIcon(
+    icon: ImageVector,
+    label: String,
+    foregroundColor: Color,
+) {
+    Surface(
+        modifier = Modifier.size(44.dp),
+        shape = CircleShape,
+        color = foregroundColor.copy(alpha = 0.14f),
+        contentColor = foregroundColor,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
 }
 
 @Composable
