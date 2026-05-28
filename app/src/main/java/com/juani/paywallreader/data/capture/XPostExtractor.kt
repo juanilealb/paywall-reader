@@ -1,6 +1,12 @@
 package com.juani.paywallreader.data.capture
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.HttpURLConnection
@@ -22,8 +28,35 @@ object XPostExtractor {
 
     fun canHandle(url: String): Boolean = parseTweetUrl(url) != null
 
+    fun fallbackArticle(url: String): CapturedArticle {
+        val tweetUrl = parseTweetUrl(url)
+        val resolvedUrl = tweetUrl?.canonicalUrl ?: url
+        val author = tweetUrl?.handle?.let { "@$it" }
+        val title = author?.let { "Post de $it" } ?: "Post de X"
+        val text = "No se pudo extraer el contenido del post. Abrilo en X para verlo completo."
+        return CapturedArticle(
+            title = title,
+            requestedUrl = url,
+            resolvedUrl = resolvedUrl,
+            author = author,
+            excerpt = text,
+            text = text,
+            markdown = buildString {
+                append("# ").append(title).append("\n\n")
+                author?.let { append("_Por ").append(it).append("_\n\n") }
+                append(text)
+                append("\n\n---\n")
+                append("Original: ").append(resolvedUrl)
+            }.trim(),
+            imageUrl = null,
+        )
+    }
+
     fun fetch(url: String): CapturedArticle {
         val tweetUrl = parseTweetUrl(url)?.canonicalUrl ?: error("No es un enlace de post de X")
+        fetchXArticleJson(tweetUrl)
+            ?.let { payload -> return fromXArticleJson(requestedUrl = url, resolvedUrl = tweetUrl, jsonPayload = payload) }
+
         val jsonPayload = fetchOEmbedJson(tweetUrl)
         val tweetArticle = fromOEmbedJson(
             requestedUrl = url,
@@ -47,6 +80,50 @@ object XPostExtractor {
         return tweetArticle
     }
 
+    internal fun fromXArticleJson(
+        requestedUrl: String,
+        resolvedUrl: String,
+        jsonPayload: String,
+    ): CapturedArticle {
+        val payload = json.parseToJsonElement(jsonPayload).jsonObject
+        val article = payload["article"]?.jsonObject ?: error("No X article payload")
+        val author = payload["author"]?.jsonObject
+        val title = article.stringOrNull("title") ?: "Artículo de X"
+        val blocks = article["blocks"]?.jsonArray.orEmpty()
+        val entityMap = article["entityMap"]?.toEntityMap().orEmpty()
+        val markdownBody = blocks.toDraftMarkdown(entityMap).trim()
+        val fallbackText = article.stringOrNull("previewText").orEmpty()
+        val text = markdownBody.markdownToPlainText().ifBlank { fallbackText }.ifBlank { title }
+        val authorLabel = author?.let {
+            listOfNotNull(
+                it.stringOrNull("name"),
+                it.stringOrNull("handle")?.let { handle -> "@$handle" },
+            ).joinToString(" ").takeIf { value -> value.isNotBlank() }
+        }
+        val createdAt = article.stringOrNull("createdAt")
+        val coverImage = article.stringOrNull("coverImage")
+        val markdown = buildString {
+            append("# ").append(title).append("\n\n")
+            authorLabel?.let { append("_Por ").append(it).append("_\n\n") }
+            createdAt?.take(10)?.let { append("Fecha: ").append(it).append("\n\n") }
+            append(markdownBody.ifBlank { fallbackText })
+            append("\n\n---\n")
+            append("Original: ").append(resolvedUrl)
+        }.trim()
+
+        return CapturedArticle(
+            title = title,
+            requestedUrl = requestedUrl,
+            resolvedUrl = resolvedUrl,
+            author = authorLabel,
+            excerpt = null,
+            html = null,
+            text = text,
+            markdown = markdown,
+            imageUrl = coverImage,
+        )
+    }
+
     fun fromOEmbedJson(
         requestedUrl: String,
         resolvedUrl: String,
@@ -67,10 +144,15 @@ object XPostExtractor {
             handle != null -> "Post de @$handle"
             else -> "Post de X"
         }
+        val readableText = if (tweetText.isGenericXFallback()) {
+            "No se pudo extraer el contenido del post. Abrilo en X para verlo completo."
+        } else {
+            tweetText
+        }
         val markdown = buildString {
             append("# ").append(title).append("\n\n")
             author?.let { append("_Por ").append(it).append("_\n\n") }
-            append(tweetText)
+            append(readableText)
             append("\n\n---\n")
             append("Original: ").append(resolvedUrl)
         }.trim()
@@ -80,9 +162,9 @@ object XPostExtractor {
             requestedUrl = requestedUrl,
             resolvedUrl = resolvedUrl,
             author = author,
-            excerpt = tweetText.take(280),
+            excerpt = readableText.take(280),
             html = html,
-            text = tweetText,
+            text = readableText,
             markdown = markdown,
             imageUrl = null,
         )
@@ -116,6 +198,37 @@ object XPostExtractor {
                 error("X oEmbed HTTP $responseCode")
             }
             connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchXArticleJson(tweetUrl: String): String? {
+        val connection = (URL("https://xtomd.com/api/fetch").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 PaywallReader/1.0")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        return try {
+            val body = """{"url":"${tweetUrl.escapeJsonString()}"}"""
+            connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..399) {
+                return null
+            }
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val payload = runCatching { json.parseToJsonElement(response).jsonObject }.getOrNull() ?: return null
+            if (payload["article"] == null) {
+                null
+            } else {
+                response
+            }
+        } catch (_: Throwable) {
+            null
         } finally {
             connection.disconnect()
         }
@@ -229,10 +342,161 @@ object XPostExtractor {
             .replace("&lt;", "<")
             .replace("&gt;", ">")
 
+    private fun String.escapeJsonString(): String =
+        buildString {
+            this@escapeJsonString.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+        }
+
     private fun String.collapseWhitespace(): String =
         replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
             .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
+
+    private fun String.isGenericXFallback(): Boolean {
+        val normalized = lowercase(Locale.US)
+        return normalized.contains("es lo que está pasando") ||
+            normalized.contains("lo que está pasando") ||
+            normalized.contains("what's happening") ||
+            normalized.contains("obtén las historias completas") ||
+            normalized.contains("get the full story")
+    }
+
+    private fun JsonObject.stringOrNull(key: String): String? =
+        this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun JsonElement.toEntityMap(): Map<Int, JsonObject> {
+        return when (this) {
+            is JsonArray -> mapNotNull { entry ->
+                val obj = entry.jsonObject
+                val key = obj["key"]?.jsonPrimitive?.intOrNull
+                val value = obj["value"]?.jsonObject
+                if (key != null && value != null) key to value else null
+            }.toMap()
+            is JsonObject -> mapNotNull { (key, value) ->
+                key.toIntOrNull()?.let { it to value.jsonObject }
+            }.toMap()
+            else -> emptyMap()
+        }
+    }
+
+    private fun List<JsonElement>.toDraftMarkdown(entityMap: Map<Int, JsonObject>): String = buildString {
+        var lastWasList = false
+        for (blockElement in this@toDraftMarkdown) {
+            val block = blockElement.jsonObject
+            val type = block.stringOrNull("type").orEmpty()
+            if (type == "atomic") {
+                resolveAtomicBlock(block, entityMap)?.let {
+                    append(it).append("\n\n")
+                }
+                lastWasList = false
+                continue
+            }
+
+            val rawText = block.stringOrNull("text").orEmpty()
+            val text = rawText.applyInlineStyles(block["inlineStyleRanges"]?.jsonArray.orEmpty())
+            if (text.isBlank()) continue
+
+            val isList = type == "unordered-list-item" || type == "ordered-list-item"
+            if (!isList && lastWasList) appendLine()
+            lastWasList = isList
+
+            when (type) {
+                "header-one", "header-two" -> append("## ").append(text.stripMarkdownMarkers()).append("\n\n")
+                "header-three" -> append("### ").append(text.stripMarkdownMarkers()).append("\n\n")
+                "blockquote" -> append("> ").append(text).append("\n\n")
+                "unordered-list-item" -> append("- ").append(text).appendLine()
+                "ordered-list-item" -> append("1. ").append(text).appendLine()
+                "code-block" -> append("```\n").append(rawText).append("\n```\n\n")
+                else -> append(text).append("\n\n")
+            }
+        }
+    }
+
+    private fun String.applyInlineStyles(styleRanges: List<JsonElement>): String {
+        if (styleRanges.isEmpty() || isEmpty()) return this
+        data class Marker(val index: Int, val text: String, val closing: Boolean)
+        val markers = mutableListOf<Marker>()
+        styleRanges.forEach { element ->
+            val range = element.jsonObject
+            val offset = range["offset"]?.jsonPrimitive?.intOrNull ?: return@forEach
+            val length = range["length"]?.jsonPrimitive?.intOrNull ?: return@forEach
+            val style = range.stringOrNull("style") ?: return@forEach
+            val marker = when (style.lowercase(Locale.US)) {
+                "bold" -> "**"
+                "italic" -> "_"
+                "strikethrough" -> "~~"
+                else -> return@forEach
+            }
+            val start = offset.coerceIn(0, this.length)
+            val end = (offset + length).coerceIn(0, this.length)
+            if (start >= end) return@forEach
+            markers += Marker(start, marker, closing = false)
+            markers += Marker(end, marker, closing = true)
+        }
+        return buildString {
+            var cursor = 0
+            markers.sortedWith(compareBy<Marker> { it.index }.thenByDescending { it.closing }).forEach { marker ->
+                if (marker.index > cursor) {
+                    append(this@applyInlineStyles.substring(cursor, marker.index))
+                    cursor = marker.index
+                }
+                append(marker.text)
+            }
+            append(this@applyInlineStyles.substring(cursor))
+        }
+    }
+
+    private fun resolveAtomicBlock(block: JsonObject, entityMap: Map<Int, JsonObject>): String? {
+        val entityKey = block["entityRanges"]?.jsonArray
+            ?.firstOrNull()
+            ?.jsonObject
+            ?.get("key")
+            ?.jsonPrimitive
+            ?.intOrNull
+            ?: return null
+        val entity = entityMap[entityKey] ?: return null
+        val type = entity.stringOrNull("type")?.uppercase(Locale.US).orEmpty()
+        val data = entity["data"]?.jsonObject
+        return when (type) {
+            "IMAGE", "PHOTO" -> {
+                val url = data?.stringOrNull("src")
+                    ?: data?.stringOrNull("url")
+                    ?: data?.stringOrNull("media_url_https")
+                url?.let { "![Imagen]($it)" }
+            }
+            "DIVIDER" -> "---"
+            "LINK" -> data?.stringOrNull("url")?.let { "[$it]($it)" }
+            else -> null
+        }
+    }
+
+    private fun String.stripMarkdownMarkers(): String =
+        replace("**", "").replace("_", "").replace("~~", "")
+
+    private fun String.markdownToPlainText(): String =
+        lineSequence()
+            .map { line ->
+                line.removePrefix("#")
+                    .removePrefix("##")
+                    .removePrefix("###")
+                    .replace(Regex("!\\[[^]]*]\\([^)]*\\)"), "")
+                    .replace(Regex("\\[([^]]+)]\\([^)]*\\)"), "$1")
+                    .replace("**", "")
+                    .replace("_", "")
+                    .replace("~~", "")
+                    .trim()
+            }
+            .filter { it.isNotBlank() && it != "---" }
+            .joinToString("\n")
 
     private data class TweetUrl(
         val handle: String,

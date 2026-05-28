@@ -50,4 +50,37 @@ class XPostExtractorTest {
 
         assertEquals(listOf("https://t.co/cardlink"), links)
     }
+
+    @Test
+    fun `fromXArticleJson converts Draft blocks into readable markdown`() {
+        val article = XPostExtractor.fromXArticleJson(
+            requestedUrl = "https://x.com/theo/status/2018091358251372601",
+            resolvedUrl = "https://x.com/theo/status/2018091358251372601",
+            jsonPayload = """
+                {
+                  "url": "https://x.com/theo/status/2018091358251372601",
+                  "author": {"name": "Theo - t3.gg", "handle": "theo"},
+                  "article": {
+                    "title": "The Agentic Code Problem",
+                    "previewText": "You hear a notification sound from a Claude Code workflow finishing.",
+                    "coverImage": "https://pbs.twimg.com/media/HAGutiCbIAAnZ30.jpg",
+                    "createdAt": "2026-02-01T22:37:28.000Z",
+                    "blocks": [
+                      {"type": "unstyled", "text": "*ding*", "inlineStyleRanges": [{"offset": 0, "length": 6, "style": "Italic"}], "entityRanges": [], "data": {}},
+                      {"type": "header-two", "text": "Our tools were not built for how we work today.", "inlineStyleRanges": [{"offset": 0, "length": 47, "style": "Bold"}], "entityRanges": [], "data": {}},
+                      {"type": "unstyled", "text": "Back in my day, we worked on one thing at a time.", "inlineStyleRanges": [], "entityRanges": [], "data": {}}
+                    ],
+                    "entityMap": []
+                  }
+                }
+            """.trimIndent(),
+        )
+
+        assertEquals("The Agentic Code Problem", article.title)
+        assertEquals("https://pbs.twimg.com/media/HAGutiCbIAAnZ30.jpg", article.imageUrl)
+        assertTrue(article.markdown.startsWith("# The Agentic Code Problem"))
+        assertTrue(article.markdown.contains("_*ding*_"))
+        assertTrue(article.markdown.contains("## Our tools were not built for how we work today."))
+        assertTrue(article.text.contains("Back in my day"))
+    }
 }

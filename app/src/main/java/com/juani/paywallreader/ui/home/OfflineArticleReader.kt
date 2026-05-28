@@ -22,10 +22,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -34,9 +34,13 @@ import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.OpenInBrowser
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarHorizontalFabPosition
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +69,11 @@ import com.juani.paywallreader.domain.model.ReadingItem
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private val OfflineReaderToolbarHeight = 72.dp
+private val OfflineReaderToolbarActionSize = 42.dp
+private val OfflineReaderToolbarIconSize = 20.dp
+private val OfflineReaderFabSize = 60.dp
 
 internal data class OfflineArticleReaderModel(
     val title: String,
@@ -115,6 +124,10 @@ private fun String.toOfflineArticleBlocks(title: String, url: String): List<Offl
             line.equals("# ${title.trim()}", ignoreCase = true) ||
                 line.equals(title.trim(), ignoreCase = true) ||
                 line.startsWith("Source:", ignoreCase = true) ||
+                line.startsWith("Original:", ignoreCase = true) ||
+                line.startsWith("Fecha:", ignoreCase = true) ||
+                (line.startsWith("_") && line.endsWith("_")) ||
+                line == "---" ||
                 line == url
         }
         .map { line ->
@@ -132,6 +145,7 @@ private fun String.toOfflineArticleBlocks(title: String, url: String): List<Offl
         .filter { it.text.isNotBlank() }
         .toList()
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun OfflineArticleReaderScreen(
     item: ReadingItem,
@@ -224,16 +238,16 @@ internal fun OfflineArticleReaderScreen(
                 onMoveToFolderAndNext = onMoveToFolderAndNext,
                 onExitToMenu = onExitToMenu,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = 14.dp,
-                        bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() + 16.dp,
-                    ),
+                    .align(Alignment.BottomCenter)
+                    .padding(WindowInsets.safeDrawing.asPaddingValues())
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .widthIn(max = 520.dp),
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OfflineArticleTopBar(
     byline: String,
@@ -243,40 +257,62 @@ private fun OfflineArticleTopBar(
 ) {
     Surface(
         modifier = Modifier.widthIn(max = 720.dp),
-        shape = CircleShape,
-        color = Color(0xFF26231D).copy(alpha = 0.92f),
-        contentColor = Color(0xFFFFF7EA),
-        tonalElevation = 0.dp,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.size(OfflineReaderToolbarActionSize),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Volver",
+                    modifier = Modifier.size(OfflineReaderToolbarIconSize),
+                )
             }
             Text(
                 text = byline,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFC7BDA9),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            IconButton(onClick = onOpenWeb) {
-                Icon(Icons.Rounded.OpenInBrowser, contentDescription = "Abrir web")
+            IconButton(
+                onClick = onOpenWeb,
+                modifier = Modifier.size(OfflineReaderToolbarActionSize),
+            ) {
+                Icon(
+                    Icons.Rounded.OpenInBrowser,
+                    contentDescription = "Abrir web",
+                    modifier = Modifier.size(OfflineReaderToolbarIconSize),
+                )
             }
-            FilledTonalButton(onClick = onMarkRead) {
-                Icon(Icons.Rounded.Check, contentDescription = null)
-                Text("Leído")
+            IconButton(
+                onClick = onMarkRead,
+                modifier = Modifier.size(OfflineReaderToolbarActionSize),
+            ) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = "Marcar leído",
+                    modifier = Modifier.size(OfflineReaderToolbarIconSize),
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FloatingReaderActions(
     onArchiveAndNext: () -> Unit,
@@ -285,33 +321,34 @@ private fun FloatingReaderActions(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    HorizontalFloatingToolbar(
+        expanded = expanded,
+        floatingActionButton = {
+            Box(
+                modifier = Modifier.size(OfflineReaderFabSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                FloatingToolbarDefaults.VibrantFloatingActionButton(
+                    onClick = { expanded = !expanded },
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowUp,
+                        contentDescription = if (expanded) "Ocultar acciones" else "Mostrar acciones",
+                    )
+                }
+            }
+        },
+        modifier = modifier.height(OfflineReaderToolbarHeight),
+        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+        floatingActionButtonPosition = FloatingToolbarHorizontalFabPosition.End,
     ) {
-        AnimatedVisibility(
-            visible = expanded,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
+        AnimatedVisibility(visible = expanded, enter = fadeIn(), exit = fadeOut()) {
             ReadingActionToolbar(
                 onArchiveAndNext = onArchiveAndNext,
                 onMoveToFolderAndNext = onMoveToFolderAndNext,
                 onExitToMenu = onExitToMenu,
             )
-        }
-        Surface(
-            shape = CircleShape,
-            color = Color(0xFF26231D).copy(alpha = 0.96f),
-            contentColor = Color(0xFFFFF7EA),
-        ) {
-            IconButton(onClick = { expanded = !expanded }) {
-                Icon(
-                    imageVector = if (expanded) Icons.Rounded.Close else Icons.Rounded.MoreVert,
-                    contentDescription = if (expanded) "Ocultar acciones" else "Mostrar acciones",
-                )
-            }
         }
     }
 }
@@ -322,32 +359,39 @@ private fun ReadingActionToolbar(
     onMoveToFolderAndNext: () -> Unit,
     onExitToMenu: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = Color(0xFF26231D).copy(alpha = 0.96f),
-        contentColor = Color(0xFFFFF7EA),
-        tonalElevation = 0.dp,
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.End,
+        IconButton(
+            onClick = onArchiveAndNext,
+            modifier = Modifier.size(OfflineReaderToolbarActionSize),
         ) {
-            TextButton(onClick = onArchiveAndNext) {
-                Icon(Icons.Rounded.Archive, contentDescription = null)
-                Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                Text("Archivar + sig.")
-            }
-            TextButton(onClick = onMoveToFolderAndNext) {
-                Icon(Icons.Rounded.Folder, contentDescription = null)
-                Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                Text("Carpeta + sig.")
-            }
-            TextButton(onClick = onExitToMenu) {
-                Icon(Icons.Rounded.Close, contentDescription = null)
-                Spacer(modifier = Modifier.widthIn(min = 8.dp))
-                Text("Salir")
-            }
+            Icon(
+                Icons.Rounded.Archive,
+                contentDescription = "Archivar y siguiente",
+                modifier = Modifier.size(OfflineReaderToolbarIconSize),
+            )
+        }
+        IconButton(
+            onClick = onMoveToFolderAndNext,
+            modifier = Modifier.size(OfflineReaderToolbarActionSize),
+        ) {
+            Icon(
+                Icons.Rounded.Folder,
+                contentDescription = "Mover a carpeta y siguiente",
+                modifier = Modifier.size(OfflineReaderToolbarIconSize),
+            )
+        }
+        IconButton(
+            onClick = onExitToMenu,
+            modifier = Modifier.size(OfflineReaderToolbarActionSize),
+        ) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = "Salir",
+                modifier = Modifier.size(OfflineReaderToolbarIconSize),
+            )
         }
     }
 }
@@ -357,6 +401,10 @@ private fun OfflineArticleHero(
     title: String,
     imageUrl: String?,
 ) {
+    if (imageUrl.isNullOrBlank()) {
+        return
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -380,12 +428,14 @@ private fun OfflineArticleHero(
                     ),
             )
             Text(
-                text = "Offline reader",
+                text = title,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(22.dp),
                 style = MaterialTheme.typography.labelLarge,
                 color = Color(0xFFEADDC7),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

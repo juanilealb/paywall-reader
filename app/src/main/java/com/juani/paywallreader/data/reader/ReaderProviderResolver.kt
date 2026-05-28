@@ -31,6 +31,8 @@ val ALLOWED_READER_HOSTS = setOf(
 private val PAYWALL_FALLBACK_HOSTS = setOf(
     "www.wired.com",
     "wired.com",
+    "www.nytimes.com",
+    "nytimes.com",
     "medium.com",
     "substack.com",
 )

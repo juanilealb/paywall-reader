@@ -37,10 +37,10 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.OpenInBrowser
@@ -88,14 +88,15 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.juani.paywallreader.R
 import com.juani.paywallreader.data.capture.ArticleCaptureScripts
+import com.juani.paywallreader.data.capture.CapturedArticle
 import com.juani.paywallreader.data.capture.DEFUDDLE_ASSET_PATH
+import com.juani.paywallreader.data.capture.XPostExtractor
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_CAPTURING
 import com.juani.paywallreader.domain.model.CAPTURE_STATUS_FAILED
 import com.juani.paywallreader.data.reader.ARTICLE_READER_HOST
 import com.juani.paywallreader.data.reader.ARCHIVE_FO_HOST
 import com.juani.paywallreader.data.reader.UNWALL_HOST
 import com.juani.paywallreader.data.reader.captureProviderKey
-import com.juani.paywallreader.data.reader.captureProviderLabel
 import com.juani.paywallreader.data.reader.isArchiveServiceUrl
 import com.juani.paywallreader.data.reader.isBlogAuthHost
 import com.juani.paywallreader.data.reader.isLikelyArticleUrl
@@ -113,6 +114,8 @@ import com.juani.paywallreader.data.reader.toUnwallUrl
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val FoldFloatingActionButtonSize = 60.dp
 private val ReaderToolbarHeight = 72.dp
@@ -140,6 +143,19 @@ fun HeadlessArticleCaptureHost(
     modifier: Modifier = Modifier,
 ) {
     val urlToCapture = captureUrl?.trim()?.takeIf { it.isLikelyWebUrl() } ?: return
+    if (XPostExtractor.canHandle(urlToCapture)) {
+        LaunchedEffect(urlToCapture) {
+            onCaptureStatusChange(urlToCapture, CAPTURE_STATUS_CAPTURING)
+            val article = withContext(Dispatchers.IO) {
+                runCatching { XPostExtractor.fetch(urlToCapture) }
+                    .getOrElse { XPostExtractor.fallbackArticle(urlToCapture) }
+            }
+            saveCapturedArticle(onSaveForLater, article)
+            onCaptureComplete(urlToCapture)
+        }
+        return
+    }
+
     key(urlToCapture) {
         var webView by remember { mutableStateOf<WebView?>(null) }
         AndroidView(
@@ -259,6 +275,37 @@ fun HeadlessArticleCaptureHost(
     }
 }
 
+private fun saveCapturedArticle(
+    onSaveForLater: (
+        title: String,
+        url: String,
+        sourceName: String,
+        resolvedUrl: String?,
+        author: String?,
+        excerpt: String?,
+        html: String?,
+        text: String?,
+        markdown: String?,
+        imageUrl: String?,
+        captureProvider: String?,
+    ) -> Unit,
+    article: CapturedArticle,
+) {
+    onSaveForLater(
+        article.title,
+        article.requestedUrl,
+        article.resolvedUrl.toDisplaySourceName(),
+        article.resolvedUrl,
+        article.author,
+        article.excerpt,
+        article.html,
+        article.text,
+        article.markdown,
+        article.imageUrl,
+        article.resolvedUrl.captureProviderKey(),
+    )
+}
+
 @Composable
 fun ReaderRoute(
     sourceName: String,
@@ -356,6 +403,12 @@ fun ReaderScreen(
     val detectsAuthSurfaces = remember(initialUrl) {
         initialUrl.isBlogAuthHost()
     }
+    val needsBrowserUserAgent = remember(initialUrl) {
+        initialUrl.needsBrowserUserAgent()
+    }
+    val needsNoJavaScriptRetry = remember(initialUrl) {
+        initialUrl.needsNoJavaScriptRetry()
+    }
     var toolbarExpanded by rememberSaveable(sourceUrl) { mutableStateOf(true) }
     var readerFocusMode by rememberSaveable(sourceUrl) { mutableStateOf(false) }
     val openOriginal = {
@@ -368,12 +421,12 @@ fun ReaderScreen(
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share)))
     }
-    val openReaderVersion = {
+    val openArchiveSearch = {
         val url = webView?.url ?: currentUrl.ifBlank { sourceUrl }
-        if (!url.isReaderServiceUrl()) {
-            val originalUrl = url.toOriginalArticleUrl()
-            webView?.loadUrl(originalUrl.toPreferredReaderUrl(fallbackToOriginal = false))
-        }
+        val originalUrl = url.toOriginalArticleUrl()
+        webView?.settings?.javaScriptEnabled = true
+        webView?.loadUrl(originalUrl.toArchiveSearchUrl())
+        Unit
     }
     fun captureCurrentForLater(onCaptured: () -> Unit = {}) {
         val view = webView
@@ -448,7 +501,6 @@ fun ReaderScreen(
         val toolbarAlignment = Alignment.BottomEnd
         val showShareAction = maxWidth >= 380.dp
         val isArchivePage = currentUrl.isArchiveServiceUrl()
-        val providerLabel = currentUrl.captureProviderKey().captureProviderLabel()
 
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -458,7 +510,7 @@ fun ReaderScreen(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
                         WebView(context).apply {
-                            configureReaderSettings(useBrowserUserAgent = detectsAuthSurfaces)
+                            configureReaderSettings(useBrowserUserAgent = needsBrowserUserAgent)
                             addJavascriptInterface(
                                 ReaderPageSignalBridge(this, detectsAuthSurfaces) { isAuthSurface = it },
                                 "PaywallReaderBridge",
@@ -476,7 +528,7 @@ fun ReaderScreen(
                                     isUserGesture: Boolean,
                                     resultMsg: Message?,
                                 ): Boolean {
-                                    if (!detectsAuthSurfaces || view == null || resultMsg == null) {
+                                    if (!needsBrowserUserAgent || view == null || resultMsg == null) {
                                         return false
                                     }
 
@@ -650,6 +702,16 @@ fun ReaderScreen(
                                 }
                             }
                             loadUrl(initialUrl)
+                            if (needsNoJavaScriptRetry) {
+                                postDelayed(
+                                    {
+                                        if ((url ?: initialUrl).toOriginalArticleUrl().sameWebHostAs(initialUrl) && settings.javaScriptEnabled) {
+                                            loadOriginalWithoutJavaScriptFallback(initialUrl)
+                                        }
+                                    },
+                                    6_000L,
+                                )
+                            }
                             webView = this
                         }
                     },
@@ -671,15 +733,6 @@ fun ReaderScreen(
                         .fillMaxWidth()
                 )
             }
-
-            ProviderDebugPill(
-                providerLabel = providerLabel,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(WindowInsets.safeDrawing.asPaddingValues())
-                    .padding(top = 8.dp, end = 10.dp)
-                    .zIndex(2f),
-            )
 
             when {
                 hasError -> ReaderError(
@@ -727,7 +780,7 @@ fun ReaderScreen(
                         }
                     },
                     onOpenOriginal = openOriginal,
-                    onOpenReader = openReaderVersion,
+                    onOpenArchive = openArchiveSearch,
                     readerFocusMode = readerFocusMode,
                     onToggleReaderFocusMode = {
                         readerFocusMode = !readerFocusMode
@@ -757,27 +810,6 @@ fun ReaderScreen(
     }
 }
 
-@Composable
-private fun ProviderDebugPill(
-    providerLabel: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
-    ) {
-        Text(
-            text = "Provider · $providerLabel",
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReaderFloatingToolbar(
@@ -794,7 +826,7 @@ private fun ReaderFloatingToolbar(
     onNavigateForward: () -> Unit,
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
-    onOpenReader: () -> Unit,
+    onOpenArchive: () -> Unit,
     readerFocusMode: Boolean,
     onToggleReaderFocusMode: () -> Unit,
     onSaveForLater: () -> Unit,
@@ -832,7 +864,7 @@ private fun ReaderFloatingToolbar(
                 onNavigateForward = onNavigateForward,
                 onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
-                onOpenReader = onOpenReader,
+                onOpenArchive = onOpenArchive,
                 readerFocusMode = readerFocusMode,
                 onToggleReaderFocusMode = onToggleReaderFocusMode,
                 onSaveForLater = onSaveForLater,
@@ -872,7 +904,7 @@ private fun ReaderFloatingToolbar(
                 onNavigateForward = onNavigateForward,
                 onRefreshOrStop = onRefreshOrStop,
                 onOpenOriginal = onOpenOriginal,
-                onOpenReader = onOpenReader,
+                onOpenArchive = onOpenArchive,
                 readerFocusMode = readerFocusMode,
                 onToggleReaderFocusMode = onToggleReaderFocusMode,
                 onSaveForLater = onSaveForLater,
@@ -931,7 +963,7 @@ private fun ReaderToolbarActions(
     onNavigateForward: () -> Unit,
     onRefreshOrStop: () -> Unit,
     onOpenOriginal: () -> Unit,
-    onOpenReader: () -> Unit,
+    onOpenArchive: () -> Unit,
     readerFocusMode: Boolean,
     onToggleReaderFocusMode: () -> Unit,
     onSaveForLater: () -> Unit,
@@ -1012,10 +1044,10 @@ private fun ReaderToolbarActions(
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
-        IconButton(onClick = onOpenReader, modifier = Modifier.size(ReaderToolbarActionSize)) {
+        IconButton(onClick = onOpenArchive, modifier = Modifier.size(ReaderToolbarActionSize)) {
             Icon(
-                imageVector = Icons.Rounded.CloudOff,
-                contentDescription = stringResource(R.string.reader_open_reader),
+                imageVector = Icons.Rounded.Archive,
+                contentDescription = stringResource(R.string.reader_open_archive),
                 modifier = Modifier.size(ReaderToolbarIconSize),
             )
         }
@@ -1066,6 +1098,14 @@ private fun ReaderToolbarActions(
     }
 }
 
+private val BROWSER_USER_AGENT_HOSTS = setOf(
+    "nytimes.com",
+)
+
+private val NO_JAVASCRIPT_RETRY_HOSTS = setOf(
+    "nytimes.com",
+)
+
 private val BLOCKED_AD_HOST_PARTS = listOf(
     "doubleclick.net",
     "googlesyndication.com",
@@ -1097,6 +1137,27 @@ private fun WebView.evaluateArticleCaptureScript(onResult: (String?) -> Unit) {
     evaluateJavascript(ArticleCaptureScripts.defuddleBootstrap(defuddleBundle)) {
         evaluateJavascript(ArticleCaptureScripts.CAPTURE_SCRIPT, onResult)
     }
+}
+
+private fun String.needsBrowserUserAgent(): Boolean =
+    runCatching {
+        val uri = Uri.parse(this)
+        uri.isBlogAuthHost() || uri.hostMatchesAny(BROWSER_USER_AGENT_HOSTS)
+    }.getOrDefault(false)
+
+private fun String.needsNoJavaScriptRetry(): Boolean =
+    runCatching { Uri.parse(this).hostMatchesAny(NO_JAVASCRIPT_RETRY_HOSTS) }.getOrDefault(false)
+
+private fun String.sameWebHostAs(other: String): Boolean =
+    runCatching {
+        val host = Uri.parse(this).host?.removePrefix("www.")
+        val otherHost = Uri.parse(other).host?.removePrefix("www.")
+        !host.isNullOrBlank() && host == otherHost
+    }.getOrDefault(false)
+
+private fun Uri.hostMatchesAny(hosts: Set<String>): Boolean {
+    val normalizedHost = host?.removePrefix("www.") ?: return false
+    return hosts.any { normalizedHost == it.removePrefix("www.") || normalizedHost.endsWith(".${it.removePrefix("www.")}") }
 }
 
 private fun android.content.res.AssetManager.readTextOrNull(path: String): String? =
@@ -1202,15 +1263,16 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
             style.textContent = `
               html.paywall-reader-focus-mode,
               html.paywall-reader-focus-mode body {
-                background: #f7f4ed !important;
-                color: #242018 !important;
-                color-scheme: light !important;
+                background: #10100e !important;
+                color: #f6f0e4 !important;
+                color-scheme: dark !important;
                 overflow-y: auto !important;
               }
               html.paywall-reader-focus-mode body {
                 font-family: Georgia, 'Times New Roman', serif !important;
                 line-height: 1.68 !important;
                 font-size: 18px !important;
+                margin: 0 !important;
                 text-rendering: optimizeLegibility !important;
                 -webkit-font-smoothing: antialiased !important;
               }
@@ -1227,33 +1289,71 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
                 display: block !important;
                 visibility: visible !important;
                 max-width: 760px !important;
-                width: auto !important;
+                width: calc(100% - 48px) !important;
                 min-height: auto !important;
                 height: auto !important;
                 max-height: none !important;
                 margin: 0 auto !important;
-                padding: 24px 18px 112px !important;
-                background: #f7f4ed !important;
-                color: #242018 !important;
+                padding: 28px 0 124px !important;
+                background: #10100e !important;
+                color: #f6f0e4 !important;
                 overflow: visible !important;
                 box-shadow: none !important;
+                box-sizing: border-box !important;
+              }
+              html.paywall-reader-focus-mode .paywall-reader-hero {
+                display: block !important;
+                width: 100% !important;
+                aspect-ratio: 16 / 9 !important;
+                object-fit: cover !important;
+                border-radius: 24px !important;
+                margin: 0 0 28px !important;
+                background: #231e18 !important;
+              }
+              html.paywall-reader-focus-mode .paywall-reader-meta {
+                color: #c7bda9 !important;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                font-size: 15px !important;
+                font-weight: 650 !important;
+                line-height: 1.35 !important;
+                margin: 0 0 18px !important;
+              }
+              html.paywall-reader-focus-mode .paywall-reader-excerpt {
+                color: #e2d8c6 !important;
+                font-family: Georgia, 'Times New Roman', serif !important;
+                font-size: 22px !important;
+                line-height: 1.35 !important;
+                margin: 0 0 28px !important;
               }
               html.paywall-reader-focus-mode :where(h1, h2, h3, h4, h5, h6) {
-                color: #17130f !important;
+                color: #fff7ea !important;
                 font-family: Georgia, 'Times New Roman', serif !important;
-                letter-spacing: -0.02em !important;
+                letter-spacing: 0 !important;
                 line-height: 1.15 !important;
-                max-width: 760px !important;
+                max-width: 100% !important;
+                overflow-wrap: break-word !important;
+              }
+              html.paywall-reader-focus-mode :where(h1) {
+                font-size: 44px !important;
+                margin: 0 0 16px !important;
+              }
+              html.paywall-reader-focus-mode :where(h2) {
+                font-size: 30px !important;
+              }
+              html.paywall-reader-focus-mode :where(h3, h4, h5, h6) {
+                font-size: 24px !important;
               }
               html.paywall-reader-focus-mode :where(p, li, blockquote, figcaption) {
-                color: #2a241d !important;
+                color: #ece1cf !important;
                 font-family: Georgia, 'Times New Roman', serif !important;
-                font-size: 1.05em !important;
+                font-size: 20px !important;
                 line-height: 1.72 !important;
-                max-width: 760px !important;
+                max-width: 100% !important;
+                overflow-wrap: break-word !important;
+                margin: 0 0 22px !important;
               }
               html.paywall-reader-focus-mode :where(a) {
-                color: #6e4f1f !important;
+                color: #e5b76b !important;
               }
               html.paywall-reader-focus-mode :where(img, video, picture, figure) {
                 max-width: 100% !important;
@@ -1279,7 +1379,7 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
             return 'off';
           }
 
-          var target = document.querySelector('article') ||
+              var target = document.querySelector('article') ||
             document.querySelector('[role="main"]') ||
             document.querySelector('main') ||
             document.querySelector('.article, .post, .entry-content, .story, .content') ||
@@ -1287,16 +1387,76 @@ private fun WebView.setReaderFocusMode(enabled: Boolean) {
           if (target) {
             target.classList.add('paywall-reader-focus-target');
             if (document.body && !document.body.dataset.paywallReaderOriginalHtml) {
+              function meta(name) {
+                var node = document.querySelector('meta[property="' + name + '"]') ||
+                  document.querySelector('meta[name="' + name + '"]');
+                return node ? (node.getAttribute('content') || '').trim() : '';
+              }
+              function firstUsefulImage() {
+                var metaImage = meta('og:image') || meta('twitter:image');
+                if (metaImage) return metaImage;
+                var images = Array.prototype.slice.call(target.querySelectorAll('img'));
+                for (var i = 0; i < images.length; i++) {
+                  var image = images[i];
+                  var src = image.currentSrc || image.src || image.getAttribute('data-src') || '';
+                  var width = image.naturalWidth || image.width || 0;
+                  var height = image.naturalHeight || image.height || 0;
+                  if (src && width >= 240 && height >= 120) return src;
+                }
+                return '';
+              }
               var title = document.querySelector('h1') || document.querySelector('meta[property="og:title"]');
               var reader = document.createElement('main');
               reader.className = 'paywall-reader-focus-target';
               var titleText = title ? (title.innerText || title.textContent || title.getAttribute('content') || '') : document.title;
+              var imageUrl = firstUsefulImage();
+              if (imageUrl) {
+                var hero = document.createElement('img');
+                hero.className = 'paywall-reader-hero';
+                hero.src = imageUrl;
+                hero.alt = titleText || '';
+                reader.appendChild(hero);
+              }
               if (titleText) {
                 var h1 = document.createElement('h1');
                 h1.textContent = titleText;
                 reader.appendChild(h1);
               }
-              reader.appendChild(target.cloneNode(true));
+              var byline = meta('author') ||
+                (document.querySelector('[rel="author"], .byline, [class*="byline"], [class*="author"]') || {}).textContent ||
+                location.hostname.replace(/^www\./, '');
+              if (byline) {
+                var metaNode = document.createElement('div');
+                metaNode.className = 'paywall-reader-meta';
+                metaNode.textContent = byline.trim();
+                reader.appendChild(metaNode);
+              }
+              var excerpt = meta('description') || meta('og:description');
+              if (excerpt) {
+                var excerptNode = document.createElement('p');
+                excerptNode.className = 'paywall-reader-excerpt';
+                excerptNode.textContent = excerpt;
+                reader.appendChild(excerptNode);
+              }
+              var text = (target.innerText || target.textContent || '').trim();
+              var lines = text.split(/\n+/)
+                .map(function(line) { return line.trim(); })
+                .filter(function(line) {
+                  return line.length > 0 &&
+                    line !== titleText &&
+                    line.toLowerCase() !== (titleText || '').toLowerCase() &&
+                    line.toLowerCase() !== (excerpt || '').toLowerCase() &&
+                    line.toLowerCase() !== (byline || '').toLowerCase() &&
+                    line.length > 24;
+                });
+              lines.slice(0, 120).forEach(function(line) {
+                var node = document.createElement('p');
+                node.textContent = line;
+                reader.appendChild(node);
+              });
+              if (reader.children.length <= (titleText ? 1 : 0)) {
+                reader.appendChild(target.cloneNode(true));
+              }
               document.body.dataset.paywallReaderOriginalHtml = document.body.innerHTML;
               document.body.innerHTML = '';
               document.body.appendChild(reader);
@@ -1582,12 +1742,19 @@ private fun WebView.installPageStateSignals(enabled: Boolean) {
 
 private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: Long) {
     val loadedUri = runCatching { Uri.parse(loadedUrl) }.getOrNull() ?: return
-    if (loadedUri.host != ARTICLE_READER_HOST && loadedUri.host != UNWALL_HOST) {
+    if (
+        loadedUri.host != ARTICLE_READER_HOST &&
+        loadedUri.host != UNWALL_HOST &&
+        !loadedUri.isPaywallFallbackHost()
+    ) {
         return
     }
 
     postDelayed(
         {
+            if (!settings.javaScriptEnabled) {
+                return@postDelayed
+            }
             evaluateJavascript(
                 """
                 (function() {
@@ -1599,8 +1766,10 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
             ) { result ->
                 val pageWeight = result?.trim('"')?.toIntOrNull() ?: 0
                 val currentHost = runCatching { Uri.parse(url).host }.getOrNull()
-                if (pageWeight < 300 && (currentHost == ARTICLE_READER_HOST || currentHost == UNWALL_HOST)) {
-                    val originalUrl = runCatching { Uri.parse(url).readerOriginalUrl() }.getOrNull()
+                if (pageWeight < 300) {
+                    val currentUrl = url ?: loadedUrl ?: return@evaluateJavascript
+                    val originalUrl = runCatching { Uri.parse(currentUrl).readerOriginalUrl() }.getOrNull()
+                        ?: currentUrl.takeIf { runCatching { Uri.parse(it).isPaywallFallbackHost() }.getOrDefault(false) }
                     if (!originalUrl.isNullOrBlank()) {
                         val originalUri = Uri.parse(originalUrl)
                         when (currentHost) {
@@ -1611,6 +1780,10 @@ private fun WebView.loadFallbackReaderIfBlank(loadedUrl: String?, delayMillis: L
                             }
 
                             UNWALL_HOST -> {
+                                loadOriginalWithoutJavaScriptFallback(originalUrl)
+                            }
+
+                            else -> {
                                 loadOriginalWithoutJavaScriptFallback(originalUrl)
                             }
                         }
@@ -1754,7 +1927,7 @@ private fun ReaderError(
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
         ) {
             Icon(
-                imageVector = Icons.Rounded.CloudOff,
+                imageVector = Icons.Rounded.OpenInBrowser,
                 contentDescription = null,
                 modifier = Modifier.padding(18.dp),
             )

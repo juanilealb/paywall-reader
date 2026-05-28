@@ -56,7 +56,7 @@
     <string name="reader_web_back">Página anterior</string>
     <string name="reader_web_forward">Página siguiente</string>
     <string name="reader_open_original">Abrir original</string>
-    <string name="reader_open_reader">Buscar en archive.ph</string>
+    <string name="reader_open_archive">Buscar en archive.ph</string>
     <string name="reader_focus_mode_on">Activar modo reader</string>
     <string name="reader_focus_mode_off">Desactivar modo reader</string>
     <string name="reader_save_later">Guardar lectura</string>

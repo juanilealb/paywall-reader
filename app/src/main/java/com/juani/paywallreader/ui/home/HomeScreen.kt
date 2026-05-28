@@ -364,9 +364,6 @@ fun HomeScreen(
     var addSourceInitialUrl by rememberSaveable { mutableStateOf("") }
     var addSourceInitialFolder by rememberSaveable { mutableStateOf(UNFILED_FOLDER_NAME) }
     var sourceToEdit by remember { mutableStateOf<Source?>(null) }
-    var selectedActionItem by remember { mutableStateOf<ReadingItem?>(null) }
-    var showMoveBookmarkDialog by rememberSaveable { mutableStateOf(false) }
-    var moveBookmarkNewFolder by rememberSaveable { mutableStateOf("") }
     var newFolderName by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSection by rememberSaveable { mutableStateOf(HomeSection.Sources) }
@@ -392,18 +389,12 @@ fun HomeScreen(
 
     fun archiveWithUndo(item: ReadingItem) {
         onArchiveItem(item)
-        if (selectedActionItem?.url == item.url) {
-            selectedActionItem = null
-        }
         showUndoSnackbar("Archivado", undo = { onRestoreItem(item) })
     }
 
     fun toggleReadWithUndo(item: ReadingItem) {
         val newReadState = !item.isRead
         onSetRead(item, newReadState)
-        if (selectedActionItem?.url == item.url && selectedFolder == null && newReadState) {
-            selectedActionItem = null
-        }
         showUndoSnackbar(
             message = if (newReadState) "Marcado como leído" else "Marcado como no leído",
             undo = { onSetRead(item, item.isRead) },
@@ -441,11 +432,12 @@ fun HomeScreen(
         uiState.readingItems
             .asSequence()
             .filter { item ->
-                if (selectedFolder == null) {
-                    !item.isRead
-                } else {
-                    item.folderName == selectedFolder
-                }
+                !item.isRead &&
+                    if (selectedFolder == null) {
+                        item.folderName == UNFILED_FOLDER_NAME
+                    } else {
+                        item.folderName == selectedFolder
+                    }
             }
             .filter { item ->
                 normalizedSearch.isBlank() ||
@@ -465,9 +457,6 @@ fun HomeScreen(
     }
     val visibleHistoryGroups = remember(visibleHistoryItems) {
         visibleHistoryItems.take(30).groupByVisitBucket()
-    }
-    val actionItem = selectedActionItem?.let { selected ->
-        uiState.readingItems.firstOrNull { it.url == selected.url }
     }
 
     LaunchedEffect(addSourceRequest) {
@@ -673,12 +662,9 @@ fun HomeScreen(
                                         focusManager.clearFocus()
                                         onReadingItemClick(it)
                                     },
-                                    onMarkRead = { item -> onMarkRead(item.url) },
                                     onArchive = { item -> archiveWithUndo(item) },
                                     onToggleRead = { item -> toggleReadWithUndo(item) },
                                     onRetryCapture = onRetryCapture,
-                                    onShowActions = { item -> selectedActionItem = item },
-                                    selectedActionUrl = actionItem?.url,
                                 )
                             }
                         }
@@ -720,38 +706,11 @@ fun HomeScreen(
             }
 
             if (showBottomControls) {
-                AnimatedVisibility(
-                    visible = actionItem != null && selectedSection == HomeSection.ReadLater,
-                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .padding(bottom = 92.dp),
-                ) {
-                    actionItem?.let { item ->
-                        ReadingActionToolbar(
-                            item = item,
-                            onReadClick = { toggleReadWithUndo(item) },
-                            onMoveClick = {
-                                moveBookmarkNewFolder = ""
-                                showMoveBookmarkDialog = true
-                            },
-                            onArchiveClick = { archiveWithUndo(item) },
-                            onRetryClick = { onRetryCapture(item) },
-                            onDismiss = { selectedActionItem = null },
-                        )
-                    }
-                }
                 BottomHomeControls(
                     selectedSection = selectedSection,
                     onSectionSelected = {
                         focusManager.clearFocus()
                         selectedSection = it
-                        selectedActionItem = null
                         searchQuery = ""
                     },
                     readingCount = uiState.readingItems.size,
@@ -894,28 +853,6 @@ fun HomeScreen(
         }
     }
 
-    if (showMoveBookmarkDialog) {
-        val item = actionItem
-        if (item != null) {
-            MoveBookmarkDialog(
-                item = item,
-                folders = readingFolders,
-                newFolderName = moveBookmarkNewFolder,
-                onNewFolderNameChange = { moveBookmarkNewFolder = it },
-                onMove = { folderName ->
-                    onMoveBookmarkToFolder(item, folderName)
-                    selectedFolder = folderName
-                    selectedActionItem = item.copy(folderName = folderName)
-                    showMoveBookmarkDialog = false
-                    moveBookmarkNewFolder = ""
-                },
-                onDismiss = { showMoveBookmarkDialog = false },
-            )
-        } else {
-            showMoveBookmarkDialog = false
-        }
-    }
-
     if (showClearHistoryConfirmation) {
         AlertDialog(
             onDismissRequest = { showClearHistoryConfirmation = false },
@@ -948,96 +885,6 @@ private fun ReadingItem.articleBodyForReading(): String =
         ?: text?.takeIf { it.isNotBlank() }
         ?: excerpt?.takeIf { it.isNotBlank() }
         ?: ""
-
-@Composable
-private fun ReadingActionToolbar(
-    item: ReadingItem,
-    onReadClick: () -> Unit,
-    onMoveClick: () -> Unit,
-    onArchiveClick: () -> Unit,
-    onRetryClick: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 6.dp,
-        shadowElevation = 10.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BrowserFavicon(url = item.url, fallbackText = item.title, modifier = Modifier.size(30.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = item.folderName.takeIf { it != UNFILED_FOLDER_NAME } ?: "Sin carpeta",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Rounded.MoreVert, contentDescription = "Cerrar acciones")
-                }
-            }
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                item {
-                    FilterChip(
-                        selected = false,
-                        onClick = onReadClick,
-                        label = { Text(if (item.isRead) "No leído" else "Leído") },
-                        leadingIcon = { Icon(imageVector = Icons.Rounded.Check, contentDescription = null) },
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = false,
-                        onClick = onMoveClick,
-                        label = { Text("Carpeta") },
-                        leadingIcon = { Icon(imageVector = Icons.Rounded.Folder, contentDescription = null) },
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = false,
-                        onClick = onArchiveClick,
-                        label = { Text("Archivar") },
-                        leadingIcon = { Icon(imageVector = Icons.Rounded.Archive, contentDescription = null) },
-                    )
-                }
-                if (item.captureStatus == CAPTURE_STATUS_FAILED) {
-                    item {
-                        FilterChip(
-                            selected = false,
-                            onClick = onRetryClick,
-                            label = { Text("Reintentar") },
-                            leadingIcon = { Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun MoveBookmarkDialog(
@@ -1549,7 +1396,6 @@ private fun SwipeableReadingItem(
 private fun ReadLaterHero(
     item: ReadingItem,
     onClick: () -> Unit,
-    onMarkRead: () -> Unit,
     onRetryCapture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1584,12 +1430,6 @@ private fun ReadLaterHero(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onMarkRead) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = stringResource(R.string.mark_read),
                     )
                 }
             }
@@ -1644,12 +1484,9 @@ private fun ReadLaterHero(
 private fun ReadingListGroup(
     items: List<ReadingItem>,
     onItemClick: (ReadingItem) -> Unit,
-    onMarkRead: (ReadingItem) -> Unit,
     onArchive: (ReadingItem) -> Unit,
     onToggleRead: (ReadingItem) -> Unit,
     onRetryCapture: (ReadingItem) -> Unit,
-    onShowActions: (ReadingItem) -> Unit,
-    selectedActionUrl: String?,
     modifier: Modifier = Modifier,
 ) {
     GroupedListSurface(modifier = modifier) {
@@ -1661,11 +1498,8 @@ private fun ReadingListGroup(
             ) {
                 ReadingListItem(
                     item = item,
-                    selected = item.url == selectedActionUrl,
                     onClick = { onItemClick(item) },
-                    onMarkRead = { onMarkRead(item) },
                     onRetryCapture = { onRetryCapture(item) },
-                    onShowActions = { onShowActions(item) },
                 )
             }
             if (index < items.lastIndex) {
@@ -1720,23 +1554,15 @@ private fun GroupDivider() {
 @Composable
 private fun ReadingListItem(
     item: ReadingItem,
-    selected: Boolean,
     onClick: () -> Unit,
-    onMarkRead: () -> Unit,
     onRetryCapture: () -> Unit,
-    onShowActions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val rowColor = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f)
-    } else {
-        Color.Transparent
-    }
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = rowColor,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
             modifier = Modifier
@@ -1775,28 +1601,11 @@ private fun ReadingListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (item.captureStatus == CAPTURE_STATUS_FAILED) {
-                        IconButton(onClick = onRetryCapture, modifier = Modifier.size(40.dp)) {
-                            Icon(
-                                imageVector = Icons.Rounded.Refresh,
-                                contentDescription = "Reintentar extracción",
-                            )
-                        }
-                    }
-                    IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+                if (item.captureStatus == CAPTURE_STATUS_FAILED) {
+                    IconButton(onClick = onRetryCapture, modifier = Modifier.size(40.dp)) {
                         Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = stringResource(R.string.mark_read),
-                        )
-                    }
-                    IconButton(onClick = onShowActions, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = "Más acciones",
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "Reintentar extracción",
                         )
                     }
                 }
