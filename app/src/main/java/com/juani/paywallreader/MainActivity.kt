@@ -18,12 +18,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedUrl = intent.extractSharedUrl()
+        if (sharedUrl == null && intent.isExternalShareIntent()) {
+            setIntent(Intent(this, MainActivity::class.java))
+            moveTaskToBack(true)
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         enableEdgeToEdge()
         setContent {
             PaywallReaderTheme {
-                AppNavigation(sharedUrl = sharedUrl)
+                AppNavigation(
+                    sharedUrl = sharedUrl,
+                    onSharedUrlHandled = { returnToCaller ->
+                        sharedUrl = null
+                        setIntent(Intent(this, MainActivity::class.java))
+                        if (returnToCaller) {
+                            moveTaskToBack(true)
+                        }
+                    },
+                )
             }
         }
     }
@@ -32,8 +45,15 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         sharedUrl = intent.extractSharedUrl()
+        if (sharedUrl == null && intent.isExternalShareIntent()) {
+            setIntent(Intent(this, MainActivity::class.java))
+            moveTaskToBack(true)
+        }
     }
 }
+
+private fun Intent?.isExternalShareIntent(): Boolean =
+    this?.action == Intent.ACTION_SEND || this?.action == Intent.ACTION_VIEW
 
 private fun Intent?.extractSharedUrl(): String? {
     if (this == null) return null
@@ -42,8 +62,11 @@ private fun Intent?.extractSharedUrl(): String? {
         Intent.ACTION_VIEW -> dataString
         else -> null
     }
-    return candidate
-        ?.lineSequence()
-        ?.map { it.trim() }
-        ?.firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+    return candidate?.extractFirstWebUrl()
 }
+
+private fun String.extractFirstWebUrl(): String? =
+    Regex("https?://\\S+", RegexOption.IGNORE_CASE)
+        .find(this)
+        ?.value
+        ?.trimEnd('.', ',', ';', ':', ')', ']', '}', '>', '"', '\'')

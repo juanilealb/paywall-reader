@@ -66,7 +66,10 @@ private val FoldFloatingActionButtonSize = 64.dp
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun AppNavigation(sharedUrl: String? = null) {
+fun AppNavigation(
+    sharedUrl: String? = null,
+    onSharedUrlHandled: (returnToCaller: Boolean) -> Unit = {},
+) {
     val backStack = rememberNavBackStack(AppRoute.Home)
     val view = LocalView.current
     val darkTheme = isSystemInDarkTheme()
@@ -146,6 +149,7 @@ fun AppNavigation(sharedUrl: String? = null) {
                     HomeRoute(
                         addSourceRequest = addSourceRequest,
                         pendingSharedUrl = sharedUrl,
+                        onSharedUrlHandled = onSharedUrlHandled,
                         selectedSourceUrl = openReaderUrl,
                         showAddSourceFab = !isMultiPaneWidth,
                         showBottomControls = isMultiPaneWidth || openReaderUrl == null,
