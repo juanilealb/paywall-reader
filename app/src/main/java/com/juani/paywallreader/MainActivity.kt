@@ -3,38 +3,32 @@ package com.juani.paywallreader
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.compose.setContent
 import com.juani.paywallreader.ui.navigation.AppNavigation
+import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 
 class MainActivity : ComponentActivity() {
-    private var sharedUrl by mutableStateOf<String?>(null)
+    private var initialReaderUrl by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sharedUrl = intent.extractSharedUrl()
-        if (sharedUrl == null && intent.isExternalShareIntent()) {
-            setIntent(Intent(this, MainActivity::class.java))
-            moveTaskToBack(true)
-        }
+        initialReaderUrl = intent.extractInitialReaderUrl()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         enableEdgeToEdge()
         setContent {
             PaywallReaderTheme {
                 AppNavigation(
-                    sharedUrl = sharedUrl,
-                    onSharedUrlHandled = { returnToCaller ->
-                        sharedUrl = null
+                    initialReaderUrl = initialReaderUrl,
+                    onInitialReaderUrlHandled = {
+                        initialReaderUrl = null
                         setIntent(Intent(this, MainActivity::class.java))
-                        if (returnToCaller) {
-                            moveTaskToBack(true)
-                        }
                     },
                 )
             }
@@ -44,29 +38,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        sharedUrl = intent.extractSharedUrl()
-        if (sharedUrl == null && intent.isExternalShareIntent()) {
-            setIntent(Intent(this, MainActivity::class.java))
-            moveTaskToBack(true)
-        }
+        initialReaderUrl = intent.extractInitialReaderUrl()
     }
 }
 
-private fun Intent?.isExternalShareIntent(): Boolean =
-    this?.action == Intent.ACTION_SEND || this?.action == Intent.ACTION_VIEW
-
-private fun Intent?.extractSharedUrl(): String? {
-    if (this == null) return null
-    val candidate = when (action) {
-        Intent.ACTION_SEND -> getStringExtra(Intent.EXTRA_TEXT)
-        Intent.ACTION_VIEW -> dataString
-        else -> null
-    }
-    return candidate?.extractFirstWebUrl()
-}
-
-private fun String.extractFirstWebUrl(): String? =
-    Regex("https?://\\S+", RegexOption.IGNORE_CASE)
-        .find(this)
-        ?.value
-        ?.trimEnd('.', ',', ';', ':', ')', ']', '}', '>', '"', '\'')
+private fun Intent.extractInitialReaderUrl(): String? =
+    ExternalShareRoutePolicy.decide(getStringExtra(EXTRA_OPEN_READER_URL)).captureUrl

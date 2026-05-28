@@ -13,8 +13,8 @@ android {
         applicationId = "com.juani.paywallreader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "1.0-update25"
+        versionCode = 26
+        versionName = "1.0-update26"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

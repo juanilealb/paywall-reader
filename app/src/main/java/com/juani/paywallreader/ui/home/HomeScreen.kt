@@ -436,7 +436,7 @@ private fun ExternalShareConfirmationSheet(
                 Text(stringResource(R.string.read_now))
             }
             TextButton(onClick = onDismiss) {
-                Text("Listo")
+                Text(stringResource(R.string.done))
             }
         }
     }

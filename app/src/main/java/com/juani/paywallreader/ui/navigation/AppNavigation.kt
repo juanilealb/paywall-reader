@@ -35,6 +35,7 @@ import androidx.compose.material3.adaptive.layout.rememberPaneExpansionState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -67,8 +68,8 @@ private val FoldFloatingActionButtonSize = 64.dp
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun AppNavigation(
-    sharedUrl: String? = null,
-    onSharedUrlHandled: (returnToCaller: Boolean) -> Unit = {},
+    initialReaderUrl: String? = null,
+    onInitialReaderUrlHandled: () -> Unit = {},
 ) {
     val backStack = rememberNavBackStack(AppRoute.Home)
     val view = LocalView.current
@@ -88,6 +89,15 @@ fun AppNavigation(
     )
     var openReaderUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var addSourceRequest by rememberSaveable { mutableStateOf(0) }
+
+    LaunchedEffect(initialReaderUrl) {
+        val url = initialReaderUrl ?: return@LaunchedEffect
+        openReaderUrl = url
+        backStack.removeAll { it is AppRoute.Reader && it.url == url }
+        backStack.add(AppRoute.Reader(url, url))
+        onInitialReaderUrlHandled()
+    }
+
     SideEffect {
         if (!view.isInEditMode) {
             WindowCompat.getInsetsController(
@@ -148,8 +158,6 @@ fun AppNavigation(
                 ) {
                     HomeRoute(
                         addSourceRequest = addSourceRequest,
-                        pendingSharedUrl = sharedUrl,
-                        onSharedUrlHandled = onSharedUrlHandled,
                         selectedSourceUrl = openReaderUrl,
                         showAddSourceFab = !isMultiPaneWidth,
                         showBottomControls = isMultiPaneWidth || openReaderUrl == null,
