@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +65,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -76,6 +78,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -128,6 +131,7 @@ import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
 import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val HomeBottomActionSize = 64.dp
@@ -138,6 +142,7 @@ fun HomeRoute(
     modifier: Modifier = Modifier,
     addSourceRequest: Int = 0,
     pendingSharedUrl: String? = null,
+    onSharedUrlHandled: (returnToCaller: Boolean) -> Unit = {},
     selectedSourceUrl: String? = null,
     showAddSourceFab: Boolean = true,
     showBottomControls: Boolean = true,
@@ -151,6 +156,7 @@ fun HomeRoute(
     var openReadLaterRequest by rememberSaveable { mutableStateOf(0) }
     var cachedArticleToRead by remember { mutableStateOf<ReadingItem?>(null) }
     var headlessCaptureUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var externalShareConfirmationUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var showReaderMoveBookmarkDialog by rememberSaveable { mutableStateOf(false) }
     var readerMoveBookmarkNewFolder by rememberSaveable { mutableStateOf("") }
     val readerFolders = remember(uiState.readingFolders, uiState.readingItems) {
@@ -177,15 +183,27 @@ fun HomeRoute(
     }
 
     LaunchedEffect(pendingSharedUrl) {
+        if (pendingSharedUrl == null) {
+            consumedSharedUrl = null
+            return@LaunchedEffect
+        }
         val decision = ExternalShareRoutePolicy.decide(pendingSharedUrl)
         val url = decision.captureUrl
-        if (url != null && url != consumedSharedUrl) {
+        if (url == null) {
+            onSharedUrlHandled(true)
+            return@LaunchedEffect
+        }
+        if (url != consumedSharedUrl) {
             consumedSharedUrl = url
             viewModel.markSharedUrlPending(url)
             headlessCaptureUrl = url
-            openReadLaterRequest++
-            Toast.makeText(context, "Capturando en segundo plano", Toast.LENGTH_SHORT).show()
+            externalShareConfirmationUrl = url
         }
+    }
+
+    fun dismissExternalShareConfirmation(returnToCaller: Boolean) {
+        externalShareConfirmationUrl = null
+        onSharedUrlHandled(returnToCaller)
     }
 
     HomeScreen(
@@ -303,6 +321,31 @@ fun HomeRoute(
             showReaderMoveBookmarkDialog = false
         }
     }
+
+    externalShareConfirmationUrl?.let { url ->
+        ExternalShareConfirmationSheet(
+            url = url,
+            onDismiss = { dismissExternalShareConfirmation(returnToCaller = true) },
+            onReadNow = {
+                dismissExternalShareConfirmation(returnToCaller = false)
+                val existing = uiState.readingItems.firstOrNull { it.url == url }
+                if (existing != null && existing.captureStatus == CAPTURE_STATUS_READY && existing.hasCapturedBody()) {
+                    cachedArticleToRead = existing
+                } else {
+                    onSourceClick(
+                        Source(
+                            id = -url.hashCode().toLong(),
+                            name = url,
+                            url = url,
+                            isDefault = false,
+                            folderName = readLaterLabel,
+                        ),
+                    )
+                }
+            },
+        )
+    }
+
     HeadlessArticleCaptureHost(
         captureUrl = headlessCaptureUrl,
         onSaveForLater = { title, url, sourceName, resolvedUrl, author, excerpt, html, text, markdown, imageUrl, captureProvider ->
@@ -328,6 +371,75 @@ fun HomeRoute(
         },
     )
 
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExternalShareConfirmationSheet(
+    url: String,
+    onDismiss: () -> Unit,
+    onReadNow: () -> Unit,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    LaunchedEffect(url) {
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm)
+        delay(2_800)
+        onDismiss()
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 520.dp)
+                .padding(horizontal = 26.dp)
+                .padding(bottom = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Bookmark,
+                    contentDescription = null,
+                    modifier = Modifier.padding(18.dp).size(36.dp),
+                )
+            }
+            Text(
+                text = stringResource(R.string.saved_to_reader),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = url.toDisplayHost(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Button(
+                onClick = onReadNow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.read_now))
+            }
+            TextButton(onClick = onDismiss) {
+                Text("Listo")
+            }
+        }
+    }
 }
 
 @Composable
