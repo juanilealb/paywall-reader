@@ -3,6 +3,8 @@ package com.juani.paywallreader.ui.home
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -87,6 +89,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -1362,6 +1365,8 @@ private fun SwipeableReadingItem(
         backgroundContent = {
             ReadLaterSwipeBackground(
                 direction = dismissState.dismissDirection,
+                progress = dismissState.progress,
+                isActionArmed = dismissState.targetValue != SwipeToDismissBoxValue.Settled,
                 item = item,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -1373,21 +1378,41 @@ private fun SwipeableReadingItem(
 @Composable
 private fun ReadLaterSwipeBackground(
     direction: SwipeToDismissBoxValue,
+    progress: Float,
+    isActionArmed: Boolean,
     item: ReadingItem,
     modifier: Modifier = Modifier,
 ) {
     val isArchive = direction == SwipeToDismissBoxValue.EndToStart
     val isReadAction = direction == SwipeToDismissBoxValue.StartToEnd
-    val containerColor = when {
-        isArchive -> MaterialTheme.colorScheme.tertiaryContainer
-        isReadAction -> MaterialTheme.colorScheme.primaryContainer
+    val actionProgress = if (direction == SwipeToDismissBoxValue.Settled) 0f else progress.coerceIn(0f, 1f)
+    val backgroundAlpha = if (isActionArmed) 1f else (0.32f + actionProgress * 0.34f).coerceIn(0f, 0.66f)
+    val targetContainerColor = when {
+        isArchive -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = backgroundAlpha)
+        isReadAction -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = backgroundAlpha)
         else -> Color.Transparent
     }
-    val contentColor = when {
-        isArchive -> MaterialTheme.colorScheme.onTertiaryContainer
-        isReadAction -> MaterialTheme.colorScheme.onPrimaryContainer
+    val targetContentColor = when {
+        isArchive -> MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = if (isActionArmed) 1f else 0.68f)
+        isReadAction -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = if (isActionArmed) 1f else 0.68f)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val containerColor by animateColorAsState(
+        targetValue = targetContainerColor,
+        label = "readLaterSwipeContainerColor",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = targetContentColor,
+        label = "readLaterSwipeContentColor",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (isActionArmed) 1.22f else 1f,
+        label = "readLaterSwipeIconScale",
+    )
+    val iconContainerAlpha by animateFloatAsState(
+        targetValue = if (isActionArmed) 0.22f else 0.10f,
+        label = "readLaterSwipeIconContainerAlpha",
+    )
     val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
     val icon = when {
         isArchive -> Icons.Rounded.Archive
@@ -1407,11 +1432,26 @@ private fun ReadLaterSwipeBackground(
             .padding(horizontal = 22.dp),
         contentAlignment = alignment,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = contentColor,
-        )
+        Surface(
+            modifier = Modifier
+                .size(if (isActionArmed) 48.dp else 44.dp)
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                },
+            shape = CircleShape,
+            color = contentColor.copy(alpha = iconContainerAlpha),
+            contentColor = contentColor,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(if (isActionArmed) 25.dp else 22.dp),
+                    tint = contentColor,
+                )
+            }
+        }
     }
 }
 
