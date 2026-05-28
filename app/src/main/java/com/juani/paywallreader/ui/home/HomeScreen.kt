@@ -3,16 +3,12 @@ package com.juani.paywallreader.ui.home
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,12 +19,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +62,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -91,10 +88,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
@@ -108,7 +105,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -129,8 +125,6 @@ import com.juani.paywallreader.ui.navigation.ExternalShareRoutePolicy
 import com.juani.paywallreader.ui.reader.HeadlessArticleCaptureHost
 import com.juani.paywallreader.ui.theme.PaywallReaderTheme
 import java.util.Calendar
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private val HomeBottomActionSize = 64.dp
@@ -665,17 +659,27 @@ fun HomeScreen(
                                     count = visibleReadingItems.size,
                                 )
                             }
-                            item {
-                                ReadingListGroup(
-                                    items = visibleReadingItems,
-                                    onItemClick = {
-                                        focusManager.clearFocus()
-                                        onReadingItemClick(it)
-                                    },
-                                    onArchive = { item -> archiveWithUndo(item) },
-                                    onToggleRead = { item -> toggleReadWithUndo(item) },
-                                    onRetryCapture = onRetryCapture,
-                                )
+                            items(
+                                items = visibleReadingItems,
+                                key = { it.id },
+                            ) { item ->
+                                SwipeableReadingItem(
+                                    item = item,
+                                    onArchive = { archiveWithUndo(item) },
+                                    onToggleRead = { toggleReadWithUndo(item) },
+                                    modifier = Modifier.animateItem(
+                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                    ),
+                                ) {
+                                    ReadingListItem(
+                                        item = item,
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            onReadingItemClick(item)
+                                        },
+                                        onRetryCapture = { onRetryCapture(item) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -1339,182 +1343,75 @@ private fun SwipeableReadingItem(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val swipeOffset = remember(item.url) { Animatable(0f) }
-    val actionThresholdPx = with(density) { 88.dp.toPx() }
-    val maxRevealPx = with(density) { 144.dp.toPx() }
-    val settleSpec = spring<Float>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMediumLow,
+    val hapticFeedback = LocalHapticFeedback.current
+    val dismissState = rememberSwipeToDismissBoxState()
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)),
+        onDismiss = { value ->
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> onToggleRead()
+                SwipeToDismissBoxValue.EndToStart -> onArchive()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+        },
+        backgroundContent = {
+            ReadLaterSwipeBackground(
+                direction = dismissState.dismissDirection,
+                item = item,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        content = { content() },
     )
-    val offsetValue = swipeOffset.value
-    val isArchive = offsetValue < 0f
-    val icon = if (isArchive) Icons.Rounded.Archive else Icons.Rounded.Check
-    val label = if (isArchive) {
-        "Archivar"
-    } else if (item.isRead) {
-        "No leído"
-    } else {
-        "Leído"
+}
+
+@Composable
+private fun ReadLaterSwipeBackground(
+    direction: SwipeToDismissBoxValue,
+    item: ReadingItem,
+    modifier: Modifier = Modifier,
+) {
+    val isArchive = direction == SwipeToDismissBoxValue.EndToStart
+    val isReadAction = direction == SwipeToDismissBoxValue.StartToEnd
+    val containerColor = when {
+        isArchive -> MaterialTheme.colorScheme.tertiaryContainer
+        isReadAction -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
     }
-    val progress = (abs(offsetValue) / actionThresholdPx).coerceIn(0f, 1f)
+    val contentColor = when {
+        isArchive -> MaterialTheme.colorScheme.onTertiaryContainer
+        isReadAction -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
+    val icon = when {
+        isArchive -> Icons.Rounded.Archive
+        item.isRead -> Icons.Rounded.Bookmark
+        else -> Icons.Rounded.Check
+    }
+    val label = when {
+        isArchive -> "Archivar"
+        item.isRead -> "No leído"
+        else -> "Leído"
+    }
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge),
-    ) {
-        StickySwipeActionBackground(
-            progress = progress,
-            isArchive = isArchive,
-            icon = icon,
-            label = label,
-            modifier = Modifier.matchParentSize(),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetValue.roundToInt(), 0) }
-                .pointerInput(item.url, item.isRead) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            coroutineScope.launch { swipeOffset.stop() }
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            coroutineScope.launch {
-                                swipeOffset.snapTo(
-                                    (swipeOffset.value + dragAmount).coerceIn(-maxRevealPx, maxRevealPx),
-                                )
-                            }
-                        },
-                        onDragCancel = {
-                            coroutineScope.launch { swipeOffset.animateTo(0f, settleSpec) }
-                        },
-                        onDragEnd = {
-                            val finalOffset = swipeOffset.value
-                            val committed = abs(finalOffset) >= actionThresholdPx
-                            coroutineScope.launch {
-                                if (committed) {
-                                    val committedOffset = if (finalOffset < 0f) -maxRevealPx else maxRevealPx
-                                    swipeOffset.animateTo(committedOffset, settleSpec)
-                                    if (finalOffset < 0f) {
-                                        onArchive()
-                                    } else {
-                                        onToggleRead()
-                                    }
-                                }
-                                swipeOffset.animateTo(0f, settleSpec)
-                            }
-                        },
-                    )
-                },
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun StickySwipeActionBackground(
-    progress: Float,
-    isArchive: Boolean,
-    icon: ImageVector,
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    val easedProgress = progress.coerceIn(0f, 1f)
-    val backgroundColor = if (isArchive) {
-        MaterialTheme.colorScheme.errorContainer
-    } else {
-        MaterialTheme.colorScheme.tertiaryContainer
-    }
-    val foregroundColor = if (isArchive) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.onTertiaryContainer
-    }
-    val alignment = if (isArchive) Alignment.CenterEnd else Alignment.CenterStart
-    val blobShape = if (isArchive) {
-        RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp, topEnd = 0.dp, bottomEnd = 0.dp)
-    } else {
-        RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 28.dp, bottomEnd = 28.dp)
-    }
-
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f)),
+            .clip(RoundedCornerShape(24.dp))
+            .background(containerColor)
+            .padding(horizontal = 22.dp),
         contentAlignment = alignment,
     ) {
-        val stickyWidth = (96.dp + (maxWidth - 96.dp) * (0.62f * easedProgress))
-            .coerceAtMost(maxWidth)
-        val labelAlpha = (0.32f + easedProgress).coerceAtMost(1f)
-
-        Surface(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(stickyWidth),
-            shape = blobShape,
-            color = backgroundColor,
-            contentColor = foregroundColor,
-            tonalElevation = 6.dp,
-            shadowElevation = if (easedProgress > 0.48f) 3.dp else 0.dp,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp),
-                contentAlignment = alignment,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (isArchive) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = foregroundColor.copy(alpha = labelAlpha),
-                        )
-                        SwipeActionIcon(icon = icon, label = label, foregroundColor = foregroundColor)
-                    } else {
-                        SwipeActionIcon(icon = icon, label = label, foregroundColor = foregroundColor)
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = foregroundColor.copy(alpha = labelAlpha),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwipeActionIcon(
-    icon: ImageVector,
-    label: String,
-    foregroundColor: Color,
-) {
-    Surface(
-        modifier = Modifier.size(44.dp),
-        shape = CircleShape,
-        color = foregroundColor.copy(alpha = 0.14f),
-        contentColor = foregroundColor,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(22.dp),
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+        )
     }
 }
 
