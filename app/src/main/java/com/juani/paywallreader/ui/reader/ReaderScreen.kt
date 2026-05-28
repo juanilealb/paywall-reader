@@ -16,35 +16,23 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -65,6 +53,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarHorizontalFabPosition
 import androidx.compose.material3.FloatingToolbarVerticalFabPosition
@@ -75,12 +64,14 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalFloatingToolbar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
@@ -93,9 +84,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -907,6 +899,11 @@ fun ReaderScreen(
                     savedArticleNewFolderName = ""
                     showSavedArticleFolderDialog = true
                 },
+                onShare = shareOriginal,
+                onArchive = { item ->
+                    onArchiveBookmark(item.url)
+                    savedArticleOverlayItem = null
+                },
                 modifier = Modifier.zIndex(3f),
             )
         }
@@ -959,143 +956,125 @@ fun ReaderScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SavedArticleConfirmationOverlay(
     item: ReadingItem?,
     onDismiss: () -> Unit,
     onReadNow: (ReadingItem) -> Unit,
     onMoveToFolder: () -> Unit,
+    onShare: () -> Unit,
+    onArchive: (ReadingItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    AnimatedVisibility(
-        visible = item != null,
-        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 }),
-        exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 3 }),
-        modifier = modifier.fillMaxSize(),
+    val savedItem = item ?: return
+    val hapticFeedback = LocalHapticFeedback.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val secondaryActions = listOf(
+        SaveOverlayAction(
+            icon = Icons.Rounded.Folder,
+            label = R.string.choose_folder,
+            onClick = onMoveToFolder,
+        ),
+        SaveOverlayAction(
+            icon = Icons.Rounded.Share,
+            label = R.string.reader_share,
+            onClick = onShare,
+        ),
+        SaveOverlayAction(
+            icon = Icons.Rounded.Archive,
+            label = R.string.archive_saved_article,
+            onClick = { onArchive(savedItem) },
+        ),
+    ).take(5)
+
+    LaunchedEffect(savedItem.url) {
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        val savedItem = item ?: return@AnimatedVisibility
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onDismiss,
-                )
-                .padding(horizontal = 18.dp),
-            contentAlignment = Alignment.BottomCenter,
+                .fillMaxWidth()
+                .widthIn(max = 520.dp)
+                .padding(horizontal = 26.dp)
+                .padding(bottom = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 520.dp)
-                    .heightIn(max = maxHeight * 0.55f)
-                    .navigationBarsPadding()
-                    .padding(bottom = 14.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    ),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                color = Color(0xFF101820),
-                contentColor = Color.White,
-                tonalElevation = 8.dp,
-                shadowElevation = 12.dp,
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color(0xFF121B24), Color(0xFF0D151D)),
-                            ),
-                        )
-                        .padding(horizontal = 26.dp, vertical = 26.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cancel))
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Bookmark,
-                            contentDescription = null,
-                            modifier = Modifier.padding(22.dp).size(44.dp),
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.saved_to_reader),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
+                    Icon(
+                        imageVector = Icons.Rounded.Bookmark,
+                        contentDescription = null,
+                        modifier = Modifier.padding(22.dp).size(44.dp),
                     )
-                    Text(
-                        text = savedItem.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.72f),
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Button(
-                        onClick = { onReadNow(savedItem) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.read_now))
-                    }
-                    Text(
-                        text = stringResource(R.string.tap_anywhere_to_dismiss),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.55f),
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SaveOverlayCircleAction(
-                            icon = Icons.Rounded.Folder,
-                            label = stringResource(R.string.folder_name),
-                            onClick = onMoveToFolder,
-                        )
-                        Text(
-                            text = savedItem.folderName.ifBlank { UNFILED_FOLDER_NAME },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.64f),
-                        )
-                    }
+                }
+                Text(
+                    text = stringResource(R.string.saved_to_reader),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = savedItem.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+
+            Button(
+                onClick = { onReadNow(savedItem) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.read_now))
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                secondaryActions.forEach { action ->
+                    SaveOverlayCircleAction(action)
                 }
             }
         }
     }
 }
 
+private data class SaveOverlayAction(
+    val icon: ImageVector,
+    val label: Int,
+    val onClick: () -> Unit,
+)
+
 @Composable
-private fun SaveOverlayCircleAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
+private fun SaveOverlayCircleAction(action: SaveOverlayAction) {
+    FilledIconButton(
+        onClick = action.onClick,
         shape = CircleShape,
-        color = Color.White.copy(alpha = 0.10f),
-        contentColor = Color.White,
-        modifier = Modifier.size(64.dp),
+        modifier = Modifier.size(56.dp),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp))
-        }
+        Icon(
+            imageVector = action.icon,
+            contentDescription = stringResource(action.label),
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 

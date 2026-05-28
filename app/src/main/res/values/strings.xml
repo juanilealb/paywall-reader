@@ -72,5 +72,5 @@
     <string name="reader_placeholder_message">Tus webs guardadas quedan a la izquierda en pantallas grandes.</string>
     <string name="saved_to_reader">Guardado en Lecturas</string>
     <string name="read_now">Leer ahora</string>
-    <string name="tap_anywhere_to_dismiss">Tocá en cualquier lugar para cerrar</string>
+    <string name="archive_saved_article">Archivar</string>
 </resources>
